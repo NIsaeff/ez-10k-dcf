@@ -1,0 +1,11 @@
+[project]
+name = "ten-k-dcf"
+version = "0.1.0"
+description = "Parsity capstone: 10-K extraction and DCF valuation"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi[standard]>=0.141.0",
+]
+
+[tool.uv]
+package = false
