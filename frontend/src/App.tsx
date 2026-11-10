@@ -12,6 +12,7 @@ import {
   MessageScrollerProvider,
   MessageScrollerViewport,
 } from "@/components/ui/message-scroller"
+import { ModeToggle } from "@/components/mode-toggle"
 
 type ChatMessage = {
   id: string
@@ -45,8 +46,9 @@ export default function App() {
 
   return (
     <main className="flex h-svh flex-col bg-background text-foreground">
-      <header className="border-b px-6 py-4">
+      <header className="flex items-center justify-between border-b px-6 py-4">
         <h1 className="text-lg font-semibold">EZ-10k: Agentic DCF</h1>
+        <ModeToggle />
       </header>
 
       <div className="min-h-0 flex-1">
