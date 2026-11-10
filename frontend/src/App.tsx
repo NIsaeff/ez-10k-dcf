@@ -13,36 +13,50 @@ import {
   MessageScrollerViewport,
 } from "@/components/ui/message-scroller"
 import { ModeToggle } from "@/components/mode-toggle"
-
-type ChatMessage = {
-  id: string
-  role: "user" | "assistant"
-  text: string
-}
+import { sendChat, type ChatMessage } from "@/lib/chat"
 
 const initialMessages: ChatMessage[] = [
   {
     id: "assistant-1",
     role: "assistant",
-    text: "Ask me about a company's 10-K and I'll pull the financials and build a DCF.",
+    content: "Ask me about a company's 10-K and I'll pull the financials and build a DCF.",
   },
 ]
 
 export default function App() {
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages)
   const [draft, setDraft] = useState("")
+  const [isSending, setIsSending] = useState(false)
 
-  const send = (event: FormEvent<HTMLFormElement>) => {
+  const send = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const text = draft.trim()
-    if (!text) return
+    if (!text || isSending) return
 
-    setMessages((current) => [
-      ...current,
-      { id: crypto.randomUUID(), role: "user", text },
-    ])
-    setDraft("")
-  }
+const next: ChatMessage[] = [
+  ...messages,
+  { id: crypto.randomUUID(), role: "user", content: text },
+]
+setMessages(next)
+setDraft("")
+setIsSending(true)
+
+try {
+  const reply = await sendChat(next)
+  setMessages((current) => [
+    ...current,
+    { id: crypto.randomUUID(), role: "assistant", content: reply },
+  ])
+} catch (error) {
+  const message = error instanceof Error ? error.message : String(error)
+  setMessages((current) => [
+    ...current,
+    { id: crypto.randomUUID(), role: "assistant", content: `Request failed: ${message}` },
+  ])
+} finally {
+  setIsSending(false)
+}
+}
 
   return (
     <main className="flex h-svh flex-col bg-background text-foreground">
@@ -71,7 +85,7 @@ export default function App() {
                             align={isUser ? "end" : "start"}
                             variant={isUser ? "default" : "muted"}
                           >
-                            <BubbleContent>{message.text}</BubbleContent>
+                            <BubbleContent>{message.content}</BubbleContent>
                           </Bubble>
                         </MessageContent>
                       </Message>
@@ -92,8 +106,9 @@ export default function App() {
             onChange={(event) => setDraft(event.target.value)}
             placeholder="Ask about a 10-K..."
             aria-label="Message"
+            disabled={isSending}
           />
-          <Button type="submit" disabled={!draft.trim()}>
+          <Button type="submit" disabled={isSending || !draft.trim()}>
             Send
           </Button>
         </form>
@@ -101,3 +116,4 @@ export default function App() {
     </main>
   )
 }
+

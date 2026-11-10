@@ -20,3 +20,10 @@ else:
     @app.get("/", response_class=HTMLResponse, include_in_schema=False)
     def index() -> str:
         return "<p>Frontend is broken as shit. Run <code>cd frontend && bun... </code>.</p>"
+
+# TODO(chat-history): when this route is implemented, accept a conversation id
+# and load the transcript server-side instead of trusting the client-sent history.
+# @app.post("/api/chat")
+# def prompt_ai():
+#
+
