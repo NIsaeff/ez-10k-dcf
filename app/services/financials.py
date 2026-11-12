@@ -38,6 +38,11 @@ METRIC_TAGS: dict[str, list[str]] = {
     ],
     "current_assets": ["AssetsCurrent"],
     "current_liabilities": ["LiabilitiesCurrent"],
+    "interest_expense": [
+        "InterestExpense",
+        "InterestExpenseNonoperating",
+        "InterestExpenseDebt",
+    ],
     "cash": [
         "CashAndCashEquivalentsAtCarryingValue",
         "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents",
@@ -289,6 +294,7 @@ def build_from_facts(
                 "capital_expenditures": series["capital_expenditures"].get(year),
                 "current_assets": series["current_assets"].get(year),
                 "current_liabilities": series["current_liabilities"].get(year),
+                "interest_expense": series["interest_expense"].get(year),
             }
         )
 

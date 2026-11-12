@@ -20,6 +20,49 @@ Deterministic valuation. Path ticker must be in the allowlist (case-insensitive)
 - `422` → `{ "error": "unsupported_ticker" | "insufficient_data", "ticker": "...", "missing_fields": [...] }`
 - `502` → upstream SEC failure after retries
 
+### `POST /api/dcf/{ticker}`
+
+Re-runs the engine with assumption overrides (wizard recalc). Body is
+`DcfOverrides` — every field optional:
+
+```json
+{ "projection_years": 7, "terminal_growth_rate": 0.03,
+  "growth_model": "fade", "growth_rate": 0.08, "wacc": 0.085 }
+```
+
+Bounds: years 3–10, terminal 0–10%, growth −50%…100%, WACC 1–30%.
+`wacc <= terminal_growth` → `422 invalid_assumptions`. The response is a normal
+`ValuationResult` with `overrides_applied` listing what was used and `engine`
+holding the exact inputs.
+
+### `POST /api/dcf/{ticker}/sensitivity`
+
+Same body plus `wacc_steps`, `growth_steps`, `wacc_span`, `growth_span`
+(defaults 5, 5, 2%, 1%). Returns a grid of per-share values: rows are WACC
+ascending, columns are terminal growth ascending. Cells with
+`wacc <= terminal_growth` are `null`, never a fabricated number. Net debt is
+applied to every cell.
+
+### `GET /api/wacc/{ticker}`
+
+CAPM decomposition: `cost_of_equity = rf + beta × ERP`,
+`WACC = E/V·Ke + D/V·Kd·(1−t)`. Every input carries a `source` string — `sec:`,
+`yahoo:`, `computed:`, `default:` or `assumption:`. Market inputs come from
+`app/services/market.py`; cost of debt comes from SEC `InterestExpense`. When a
+CAPM input is unavailable the response falls back to the manual default WACC and
+flags `capm_incomplete`.
+
+```json
+{
+  "ticker": "KO", "wacc": 0.0886, "cost_of_equity": 0.095,
+  "cost_of_debt": 0.0299, "weight_equity": 0.9026, "weight_debt": 0.0974,
+  "market_cap": 420819408683.78, "price": 97.57, "as_of": "2026-11-11",
+  "inputs": [{ "key": "beta", "label": "Beta", "value": 1.0,
+               "source": "default: market beta (computed beta unusable)" }],
+  "flags": ["beta_unreliable", "beta_default"]
+}
+```
+
 ### `POST /api/chat`
 
 ```json
@@ -125,6 +168,13 @@ share-count inputs emit the latest fiscal year only. `total_debt` may emit sever
 sum to `valuation.total_debt`. `url` is the SEC filing index page for the fact's own
 `accn`, so each number links back to the filing that reported it. It is additive and
 optional; consumers must tolerate an empty list.
+
+`engine` exposes the exact inputs the projection consumed — `base_fcff`, `growth_rate`,
+`growth_model`, `terminal_growth_rate`, `projection_years`, `wacc`, `total_debt`, `cash`,
+`shares_outstanding`, `tax_rate`, `base_year`. The frontend mirrors
+`project_fcff` + `build_valuation` from these values to preview slider drags, and a
+parity test keeps that mirror honest. `overrides_applied` lists which assumptions the
+caller set; `assumptions.growth_model` is `fade` or `constant`.
 
 Validation rules:
 

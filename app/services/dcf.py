@@ -149,14 +149,23 @@ def project_fcff(
     base_year: int,
     wacc: float,
     years: int = DEFAULT_PROJECTION_YEARS,
+    growth_model: str = "fade",
 ) -> list[ProjectionYear]:
+    """Project FCFF.
+
+    ``fade`` interpolates growth from ``growth_rate`` down to the terminal rate
+    over the projection window. ``constant`` holds ``growth_rate`` throughout.
+    """
+    if growth_model not in ("fade", "constant"):
+        raise ValueError(f"Unknown growth model: {growth_model}")
+
     projection: list[ProjectionYear] = []
     fcff = base_fcff
     for index in range(1, years + 1):
-        if years > 1:
-            growth = growth_rate + (terminal_growth_rate - growth_rate) * (index - 1) / (years - 1)
-        else:
+        if growth_model == "constant" or years <= 1:
             growth = growth_rate
+        else:
+            growth = growth_rate + (terminal_growth_rate - growth_rate) * (index - 1) / (years - 1)
         fcff = fcff * (1.0 + growth)
         discount_factor = 1.0 / (1.0 + wacc) ** index
         projection.append(
@@ -214,3 +223,70 @@ def build_valuation(
         value_per_share=value_per_share,
     )
     return summary, flags
+
+
+def _linspace(low: float, high: float, steps: int) -> list[float]:
+    if steps <= 1:
+        return [low]
+    return [low + (high - low) * index / (steps - 1) for index in range(steps)]
+
+
+def sensitivity_grid(
+    *,
+    base_fcff: float,
+    growth_rate: float,
+    growth_model: str,
+    terminal_growth_rate: float,
+    base_year: int,
+    years: int,
+    wacc: float,
+    total_debt: float,
+    cash_and_equivalents: float,
+    shares_outstanding: float,
+    wacc_steps: int = 5,
+    growth_steps: int = 5,
+    wacc_span: float = 0.02,
+    growth_span: float = 0.01,
+) -> tuple[list[float], list[float], list[list[float | None]]]:
+    """Per-share value across WACC (rows) x terminal growth (columns).
+
+    Cells where ``wacc <= terminal growth`` are None rather than a fabricated
+    number. Net debt is applied, unlike the Dash app's dead helper.
+    """
+    wacc_values = _linspace(
+        max(0.001, wacc - wacc_span), min(0.60, wacc + wacc_span), wacc_steps
+    )
+    growth_values = _linspace(
+        max(-0.05, terminal_growth_rate - growth_span),
+        terminal_growth_rate + growth_span,
+        growth_steps,
+    )
+
+    values: list[list[float | None]] = []
+    for row_wacc in wacc_values:
+        row: list[float | None] = []
+        for column_growth in growth_values:
+            if row_wacc <= column_growth:
+                row.append(None)
+                continue
+            projection = project_fcff(
+                base_fcff=base_fcff,
+                growth_rate=growth_rate,
+                terminal_growth_rate=column_growth,
+                base_year=base_year,
+                wacc=row_wacc,
+                years=years,
+                growth_model=growth_model,
+            )
+            summary, _flags = build_valuation(
+                projection=projection,
+                terminal_growth_rate=column_growth,
+                wacc=row_wacc,
+                total_debt=total_debt,
+                cash_and_equivalents=cash_and_equivalents,
+                shares_outstanding=shares_outstanding,
+            )
+            row.append(summary.value_per_share)
+        values.append(row)
+
+    return wacc_values, growth_values, values

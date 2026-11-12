@@ -21,7 +21,7 @@ def test_health() -> None:
 
 
 def test_analyze_supported_ticker(monkeypatch) -> None:
-    monkeypatch.setattr(valuation, "analyze", lambda ticker: KO_RESULT)
+    monkeypatch.setattr(valuation, "analyze", lambda ticker, overrides=None: KO_RESULT)
     response = client.post("/api/analyze/ko")
     assert response.status_code == 200
     body = response.json()
@@ -36,7 +36,7 @@ def test_analyze_unsupported_ticker() -> None:
 
 
 def test_analyze_insufficient_data(monkeypatch) -> None:
-    def boom(ticker: str) -> None:
+    def boom(ticker: str, overrides=None) -> None:
         raise InsufficientData(ticker, ["shares_outstanding"])
 
     monkeypatch.setattr(valuation, "analyze", boom)
@@ -48,7 +48,7 @@ def test_analyze_insufficient_data(monkeypatch) -> None:
 
 
 def test_chat_values_a_ticker(monkeypatch) -> None:
-    monkeypatch.setattr(valuation, "analyze", lambda ticker: KO_RESULT)
+    monkeypatch.setattr(valuation, "analyze", lambda ticker, overrides=None: KO_RESULT)
     monkeypatch.setattr(
         "app.main.llm.narrate_valuation",
         lambda result: "KO is worth about $31.70 per share.",
@@ -74,7 +74,7 @@ def test_chat_plain_message_uses_llm(monkeypatch) -> None:
 
 
 def test_chat_insufficient_data_is_friendly(monkeypatch) -> None:
-    def boom(ticker: str) -> None:
+    def boom(ticker: str, overrides=None) -> None:
         raise InsufficientData(ticker, ["cash_and_equivalents"])
 
     monkeypatch.setattr(valuation, "analyze", boom)
@@ -117,3 +117,93 @@ def test_missing_asset_is_not_html() -> None:
     response = client.get("/assets/does-not-exist.js")
     assert response.status_code == 404
     assert "text/html" not in response.headers.get("content-type", "")
+
+
+# --- DCF wizard endpoints ---------------------------------------------------
+
+from app.services import financials, market
+from app.services.market import MarketInputs
+from app.services.valuation import InvalidAssumptions
+
+
+def test_dcf_recalc_passes_overrides(monkeypatch) -> None:
+    captured = {}
+
+    def fake_analyze(ticker, overrides=None):
+        captured["ticker"] = ticker
+        captured["overrides"] = overrides
+        return KO_RESULT
+
+    monkeypatch.setattr(valuation, "analyze", fake_analyze)
+    response = client.post("/api/dcf/ko", json={"projection_years": 7, "wacc": 0.09})
+
+    assert response.status_code == 200
+    assert captured["ticker"] == "ko"
+    assert captured["overrides"].projection_years == 7
+    assert captured["overrides"].wacc == 0.09
+
+
+def test_dcf_recalc_rejects_out_of_range_body() -> None:
+    response = client.post("/api/dcf/KO", json={"projection_years": 99})
+    assert response.status_code == 422
+
+
+def test_dcf_recalc_maps_invalid_assumptions(monkeypatch) -> None:
+    def boom(ticker, overrides=None):
+        raise InvalidAssumptions("WACC must be greater than terminal growth")
+
+    monkeypatch.setattr(valuation, "analyze", boom)
+    response = client.post(
+        "/api/dcf/KO", json={"wacc": 0.02, "terminal_growth_rate": 0.03}
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"] == "invalid_assumptions"
+
+
+def test_sensitivity_endpoint_returns_grid(monkeypatch) -> None:
+    monkeypatch.setattr(valuation, "analyze", lambda ticker, overrides=None: KO_RESULT)
+    response = client.post(
+        "/api/dcf/KO/sensitivity", json={"wacc_steps": 3, "growth_steps": 3}
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body["values"]) == 3
+    assert all(len(row) == 3 for row in body["values"])
+    assert body["base_wacc"] == KO_RESULT.assumptions.wacc
+    assert body["base_terminal_growth"] == KO_RESULT.assumptions.terminal_growth_rate
+
+
+def test_wacc_endpoint_returns_decomposition(monkeypatch) -> None:
+    monkeypatch.setattr(
+        financials, "load_company", lambda ticker: company_from_fixture("KO")
+    )
+    monkeypatch.setattr(
+        market,
+        "market_inputs",
+        lambda ticker: MarketInputs(
+            ticker="KO",
+            price=60.0,
+            beta_computed=0.55,
+            beta_observations=104,
+            beta_r_squared=0.35,
+            risk_free_rate=0.042,
+            as_of="2026-11-11",
+            available=True,
+        ),
+    )
+    response = client.get("/api/wacc/ko")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert 0 < body["wacc"] < 0.3
+    assert body["cost_of_equity"] is not None
+    assert body["inputs"]
+    assert all(item["source"] for item in body["inputs"])
+
+
+def test_wacc_endpoint_rejects_unsupported_ticker() -> None:
+    response = client.get("/api/wacc/ZZZ")
+    assert response.status_code == 422
+    assert response.json()["error"] == "unsupported_ticker"

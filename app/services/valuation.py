@@ -1,8 +1,19 @@
-"""Orchestrate ticker -> SEC facts -> FCFF history -> DCF valuation."""
+"""Orchestrate ticker -> SEC facts -> FCFF history -> DCF valuation.
+
+The engine accepts assumption overrides so the wizard and the chat share one
+implementation: ``engine`` in the response is exactly what the projection math
+consumed, and the frontend mirrors those numbers for slider previews.
+"""
 
 from __future__ import annotations
 
-from app.schemas import Assumptions, SourceFact, ValuationResult
+from app.schemas import (
+    Assumptions,
+    DcfOverrides,
+    EngineInputs,
+    SourceFact,
+    ValuationResult,
+)
 from app.services import dcf, financials
 
 SUPPORTED_TICKERS = [
@@ -40,14 +51,26 @@ class UnsupportedTicker(Exception):
         super().__init__(f"Unsupported ticker: {ticker}")
 
 
-def analyze(ticker: str) -> ValuationResult:
+class InvalidAssumptions(Exception):
+    def __init__(self, detail: str):
+        self.detail = detail
+        super().__init__(detail)
+
+
+def analyze(
+    ticker: str,
+    overrides: DcfOverrides | None = None,
+) -> ValuationResult:
     ticker = ticker.upper().strip()
     if ticker not in SUPPORTED_TICKERS:
         raise UnsupportedTicker(ticker)
-    return analyze_from_company(financials.load_company(ticker))
+    return analyze_from_company(financials.load_company(ticker), overrides)
 
 
-def analyze_from_company(company: financials.CompanyFinancials) -> ValuationResult:
+def analyze_from_company(
+    company: financials.CompanyFinancials,
+    overrides: DcfOverrides | None = None,
+) -> ValuationResult:
     ticker = company.ticker
     if ticker not in SUPPORTED_TICKERS:
         raise UnsupportedTicker(ticker)
@@ -68,18 +91,53 @@ def analyze_from_company(company: financials.CompanyFinancials) -> ValuationResu
         latest_raw.get("tax_expense"), latest_raw.get("pretax_income")
     )
 
+    # Effective assumptions: engine defaults, then any user overrides.
+    years = PROJECTION_YEARS
+    terminal_growth = TERMINAL_GROWTH
+    growth_model = "fade"
     wacc = WACC_DEFAULTS[ticker]
+    wacc_source = "manual_default"
+    applied: list[str] = []
+
+    if overrides is not None:
+        if overrides.projection_years is not None:
+            years = overrides.projection_years
+            applied.append("projection_years")
+        if overrides.terminal_growth_rate is not None:
+            terminal_growth = overrides.terminal_growth_rate
+            applied.append("terminal_growth_rate")
+        if overrides.growth_model is not None:
+            growth_model = overrides.growth_model
+            applied.append("growth_model")
+        if overrides.growth_rate is not None:
+            growth = overrides.growth_rate
+            growth_source = "override"
+            applied.append("growth_rate")
+        if overrides.wacc is not None:
+            wacc = overrides.wacc
+            wacc_source = "override"
+            applied.append("wacc")
+
+    if wacc <= terminal_growth:
+        raise InvalidAssumptions(
+            f"WACC ({wacc:.2%}) must be greater than terminal growth "
+            f"({terminal_growth:.2%})"
+        )
+    if wacc <= -1.0:
+        raise InvalidAssumptions("WACC must be greater than -100%")
+
     projection = dcf.project_fcff(
         base_fcff=base_fcff,
         growth_rate=growth,
-        terminal_growth_rate=TERMINAL_GROWTH,
+        terminal_growth_rate=terminal_growth,
         base_year=latest.fiscal_year,
         wacc=wacc,
-        years=PROJECTION_YEARS,
+        years=years,
+        growth_model=growth_model,
     )
     summary, valuation_flags = dcf.build_valuation(
         projection=projection,
-        terminal_growth_rate=TERMINAL_GROWTH,
+        terminal_growth_rate=terminal_growth,
         wacc=wacc,
         total_debt=company.total_debt,
         cash_and_equivalents=company.cash_and_equivalents,
@@ -94,24 +152,39 @@ def analyze_from_company(company: financials.CompanyFinancials) -> ValuationResu
                 *growth_flags,
                 *base_flags,
                 *valuation_flags,
-                "wacc_manual_default",
+                *([] if wacc_source == "override" else ["wacc_manual_default"]),
             ]
         )
     )
 
     assumptions = Assumptions(
-        projection_years=PROJECTION_YEARS,
-        terminal_growth_rate=TERMINAL_GROWTH,
+        projection_years=years,
+        terminal_growth_rate=terminal_growth,
         wacc=wacc,
-        wacc_source="manual_default",
+        wacc_source=wacc_source,
         tax_rate=tax_rate,
         tax_rate_source="default" if tax_default else "effective_from_filing",
         growth_rate=growth,
+        growth_model=growth_model,
         growth_source=growth_source,
         fcff_base=base_fcff,
         fcff_base_source=base_source,
         share_count_source=company.share_count_source,
         net_debt_treatment="total_debt_minus_cash",
+    )
+
+    engine = EngineInputs(
+        base_fcff=base_fcff,
+        growth_rate=growth,
+        growth_model=growth_model,
+        terminal_growth_rate=terminal_growth,
+        projection_years=years,
+        wacc=wacc,
+        total_debt=company.total_debt,
+        cash=company.cash_and_equivalents,
+        shares_outstanding=company.shares_outstanding,
+        tax_rate=tax_rate,
+        base_year=latest.fiscal_year,
     )
 
     return ValuationResult(
@@ -123,6 +196,8 @@ def analyze_from_company(company: financials.CompanyFinancials) -> ValuationResu
         assumptions=assumptions,
         projection=projection,
         valuation=summary,
+        engine=engine,
+        overrides_applied=applied,
         flags=flags,
         sources=company.sources,
         source_facts=[SourceFact(**row) for row in company.source_facts],

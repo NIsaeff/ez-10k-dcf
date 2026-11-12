@@ -3,6 +3,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 ChatRole = Literal["user", "assistant", "system"]
+GrowthModel = Literal["fade", "constant"]
 
 
 class ChatMessage(BaseModel):
@@ -57,11 +58,77 @@ class Assumptions(BaseModel):
     tax_rate: float
     tax_rate_source: str
     growth_rate: float
+    growth_model: GrowthModel = "fade"
     growth_source: str
     fcff_base: float
     fcff_base_source: str
     share_count_source: str
     net_debt_treatment: str
+
+
+class EngineInputs(BaseModel):
+    """Everything the projection math consumes.
+
+    The frontend mirrors ``project_fcff`` + ``build_valuation`` from exactly
+    these values, so slider previews and backend results cannot diverge.
+    """
+
+    base_fcff: float
+    growth_rate: float
+    growth_model: GrowthModel
+    terminal_growth_rate: float
+    projection_years: int
+    wacc: float
+    total_debt: float
+    cash: float
+    shares_outstanding: float
+    tax_rate: float
+    base_year: int
+
+
+class DcfOverrides(BaseModel):
+    projection_years: int | None = Field(default=None, ge=3, le=10)
+    terminal_growth_rate: float | None = Field(default=None, ge=0.0, le=0.10)
+    growth_rate: float | None = Field(default=None, ge=-0.50, le=1.00)
+    growth_model: GrowthModel | None = None
+    wacc: float | None = Field(default=None, ge=0.01, le=0.30)
+
+
+class SensitivityRequest(DcfOverrides):
+    wacc_steps: int = Field(default=5, ge=2, le=11)
+    growth_steps: int = Field(default=5, ge=2, le=11)
+    wacc_span: float = Field(default=0.02, ge=0.0, le=0.10)
+    growth_span: float = Field(default=0.01, ge=0.0, le=0.05)
+
+
+class SensitivityGrid(BaseModel):
+    wacc_values: list[float]
+    growth_values: list[float]
+    values: list[list[float | None]]
+    base_wacc: float
+    base_terminal_growth: float
+
+
+class WaccInput(BaseModel):
+    key: str
+    label: str
+    value: float | None
+    source: str
+    detail: str | None = None
+
+
+class WaccBreakdown(BaseModel):
+    ticker: str
+    wacc: float
+    cost_of_equity: float | None = None
+    cost_of_debt: float | None = None
+    weight_equity: float | None = None
+    weight_debt: float | None = None
+    market_cap: float | None = None
+    price: float | None = None
+    as_of: str | None = None
+    inputs: list[WaccInput] = Field(default_factory=list)
+    flags: list[str] = Field(default_factory=list)
 
 
 class ProjectionYear(BaseModel):
@@ -92,6 +159,8 @@ class ValuationResult(BaseModel):
     assumptions: Assumptions
     projection: list[ProjectionYear]
     valuation: ValuationSummary
+    engine: EngineInputs | None = None
+    overrides_applied: list[str] = Field(default_factory=list)
     flags: list[str]
     sources: list[str]
     source_facts: list[SourceFact] = Field(default_factory=list)

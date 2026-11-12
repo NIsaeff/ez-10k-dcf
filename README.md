@@ -5,7 +5,8 @@ latest 10-K financials from SEC EDGAR, and compute a discounted cash flow valuat
 the chat UI.
 
 **Status:** phases 1–7 complete (backend, DCF, SEC extraction, API, UI, QA, drill-down
-provenance). Submission artifacts (assignment writeup + demo video) remain.
+provenance). Phase 8 (DCF Wizard) backend is in; the wizard UI is next. Submission
+artifacts (assignment writeup + demo video) remain.
 
 ## Supported tickers
 
@@ -62,6 +63,9 @@ React chat (Vite) ──/api/chat──▶ FastAPI
 | Route | Purpose |
 |---|---|
 | `POST /api/analyze/{ticker}` | Deterministic `ValuationResult` |
+| `POST /api/dcf/{ticker}` | Recalculate with assumption overrides |
+| `POST /api/dcf/{ticker}/sensitivity` | WACC × terminal-growth grid |
+| `GET /api/wacc/{ticker}` | CAPM/WACC decomposition with per-input sources |
 | `POST /api/chat` | `{messages}` → `{reply, valuation}`; detects allowlisted tickers |
 | `GET /api/health` | status, model, supported tickers |
 | `GET /docs` | Swagger UI |

@@ -10,13 +10,22 @@ from app.config import settings
 from app.schemas import (
     ChatRequest,
     ChatResponse,
+    DcfOverrides,
     ErrorResponse,
     HealthResponse,
+    SensitivityGrid,
+    SensitivityRequest,
     ValuationResult,
+    WaccBreakdown,
 )
-from app.services import valuation
+from app.services import dcf, financials, market, valuation, wacc
 from app.services.financials import InsufficientData
-from app.services.valuation import SUPPORTED_TICKERS, UnsupportedTicker
+from app.services.valuation import (
+    SUPPORTED_TICKERS,
+    WACC_DEFAULTS,
+    InvalidAssumptions,
+    UnsupportedTicker,
+)
 
 app = FastAPI(title=settings.project_name)
 
@@ -47,10 +56,13 @@ def health() -> HealthResponse:
     )
 
 
-@app.post("/api/analyze/{ticker}", response_model=ValuationResult)
-def analyze_ticker(ticker: str):
+def _valuation_or_error(
+    ticker: str,
+    overrides: DcfOverrides | None = None,
+) -> ValuationResult | JSONResponse:
+    """Map engine failures onto the documented error envelope."""
     try:
-        return valuation.analyze(ticker)
+        return valuation.analyze(ticker, overrides)
     except UnsupportedTicker:
         return JSONResponse(
             status_code=422,
@@ -58,6 +70,15 @@ def analyze_ticker(ticker: str):
                 error="unsupported_ticker",
                 ticker=ticker.upper(),
                 detail=f"Supported tickers: {', '.join(SUPPORTED_TICKERS)}",
+            ).model_dump(),
+        )
+    except InvalidAssumptions as exc:
+        return JSONResponse(
+            status_code=422,
+            content=ErrorResponse(
+                error="invalid_assumptions",
+                ticker=ticker.upper(),
+                detail=exc.detail,
             ).model_dump(),
         )
     except InsufficientData as exc:
@@ -78,6 +99,99 @@ def analyze_ticker(ticker: str):
                 detail=f"{type(exc).__name__}: {exc}",
             ).model_dump(),
         )
+
+
+@app.post("/api/analyze/{ticker}", response_model=ValuationResult)
+def analyze_ticker(ticker: str):
+    return _valuation_or_error(ticker)
+
+
+@app.post("/api/dcf/{ticker}", response_model=ValuationResult)
+def dcf_recalculate(ticker: str, overrides: DcfOverrides | None = None):
+    """Re-run the engine with assumption overrides (wizard recalc)."""
+    return _valuation_or_error(ticker, overrides)
+
+
+@app.post("/api/dcf/{ticker}/sensitivity", response_model=SensitivityGrid)
+def dcf_sensitivity(ticker: str, request: SensitivityRequest | None = None):
+    payload = request or SensitivityRequest()
+    result = _valuation_or_error(ticker, payload)
+    if not isinstance(result, ValuationResult):
+        return result
+    if result.engine is None:
+        return JSONResponse(
+            status_code=502,
+            content=ErrorResponse(
+                error="engine_unavailable",
+                ticker=ticker.upper(),
+            ).model_dump(),
+        )
+
+    engine = result.engine
+    wacc_values, growth_values, values = dcf.sensitivity_grid(
+        base_fcff=engine.base_fcff,
+        growth_rate=engine.growth_rate,
+        growth_model=engine.growth_model,
+        terminal_growth_rate=engine.terminal_growth_rate,
+        base_year=engine.base_year,
+        years=engine.projection_years,
+        wacc=engine.wacc,
+        total_debt=engine.total_debt,
+        cash_and_equivalents=engine.cash,
+        shares_outstanding=engine.shares_outstanding,
+        wacc_steps=payload.wacc_steps,
+        growth_steps=payload.growth_steps,
+        wacc_span=payload.wacc_span,
+        growth_span=payload.growth_span,
+    )
+    return SensitivityGrid(
+        wacc_values=wacc_values,
+        growth_values=growth_values,
+        values=values,
+        base_wacc=engine.wacc,
+        base_terminal_growth=engine.terminal_growth_rate,
+    )
+
+
+@app.get("/api/wacc/{ticker}", response_model=WaccBreakdown)
+def wacc_breakdown(ticker: str):
+    ticker = ticker.upper().strip()
+    if ticker not in SUPPORTED_TICKERS:
+        return JSONResponse(
+            status_code=422,
+            content=ErrorResponse(
+                error="unsupported_ticker",
+                ticker=ticker,
+                detail=f"Supported tickers: {', '.join(SUPPORTED_TICKERS)}",
+            ).model_dump(),
+        )
+
+    try:
+        company = financials.load_company(ticker)
+    except InsufficientData as exc:
+        return JSONResponse(
+            status_code=422,
+            content=ErrorResponse(
+                error="insufficient_data",
+                ticker=exc.ticker,
+                missing_fields=exc.missing_fields,
+            ).model_dump(),
+        )
+    except Exception as exc:  # noqa: BLE001 - map upstream failures to 502
+        return JSONResponse(
+            status_code=502,
+            content=ErrorResponse(
+                error="upstream_error",
+                ticker=ticker,
+                detail=f"{type(exc).__name__}: {exc}",
+            ).model_dump(),
+        )
+
+    return wacc.build_wacc(
+        company,
+        market.market_inputs(ticker),
+        fallback_wacc=WACC_DEFAULTS[ticker],
+    )
 
 
 @app.post("/api/chat", response_model=ChatResponse)

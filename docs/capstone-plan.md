@@ -1,6 +1,6 @@
 # EZ-10k — Capstone Plan
 
-Status: v0.3 (phases 1–7 complete; submission pending). Owner: capstone repo
+Status: v0.4 (phases 1–7 complete; phase 8 DCF Wizard in progress). Owner: capstone repo
 (`parsity_capstone_10k_dcf`).
 
 ## Product
@@ -109,9 +109,21 @@ Config is read through `pydantic-settings`; `.env.example` documents names only.
     expandable XBRL input groups; each fact links to the SEC filing that reported it.
     **(done)**
 
-### Phase 8 — Submission
+### Phase 8 — DCF Wizard (in progress)
 
-21. README, `assignments/day-36_capstone-kickoff/{README,VIDEO}.md`, PROGRESS 36–39,
+21. `app/services/market.py`: Yahoo chart + crumb, 24h cache, beta with R²/reporting
+    and a negative cache for 429s. **(done)**
+22. Engine overrides, growth-model switch, sensitivity grid, `/api/wacc` CAPM
+    decomposition with per-input provenance. **(done)**
+23. TanStack Router shell (`/` chat, `/wizard`) + SPA fallback in `main.py`. **(todo)**
+24. Extract shared valuation components out of `ValuationCard`. **(todo)**
+25. FCFF panel: history, composition, SVG trend chart. **(todo)**
+26. DCF panel: live sliders with a parity-tested TS mirror, model selector, grid. **(todo)**
+27. WACC panel: CAPM inputs with source badges and overrides. **(todo)**
+
+### Phase 9 — Submission
+
+28. README, `assignments/day-36_capstone-kickoff/{README,VIDEO}.md`, PROGRESS 36–39,
     Feynman note, demo video.
 
 ## Anticipated blockers → unblock
