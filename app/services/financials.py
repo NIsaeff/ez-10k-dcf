@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from functools import lru_cache
 from typing import Any
 
 from app.schemas import FilingInfo
@@ -343,7 +344,14 @@ def build_from_facts(
     )
 
 
+@lru_cache(maxsize=16)
 def load_company(ticker: str) -> CompanyFinancials:
+    """Load and parse a company from cached SEC facts.
+
+    Cached in-process: parsing a 5 MB companyfacts JSON takes ~50 ms, which is
+    too slow to repeat on every wizard recalculation. The SEC files themselves
+    are cached on disk by ``edgar``; this only avoids re-parsing them.
+    """
     info = edgar.company_info(ticker)
     cik = int(info["cik"])
     filing = FilingInfo(**edgar.latest_10k(cik))

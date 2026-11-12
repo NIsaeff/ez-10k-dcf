@@ -1,7 +1,9 @@
 import re
+from pathlib import Path
 
-from fastapi import FastAPI
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from app import llm
 from app.config import settings
@@ -115,7 +117,32 @@ def chat(payload: ChatRequest) -> ChatResponse:
 
 
 if settings.frontend_dist.is_dir():
-    app.frontend("/", directory=settings.frontend_dist)
+    assets_dir = settings.frontend_dist / "assets"
+    if assets_dir.is_dir():
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    def spa(full_path: str) -> FileResponse:
+        """Serve built files, and index.html for client-side routes.
+
+        Registered last so every API route wins. Anything with a file extension
+        that is not on disk returns 404 instead of HTML, which keeps a missing
+        script from looking like a successful page load.
+        """
+        root = settings.frontend_dist.resolve()
+
+        if full_path.startswith("api/"):
+            raise HTTPException(status_code=404)
+
+        candidate = (root / full_path).resolve()
+        if candidate.is_file() and root in candidate.parents:
+            return FileResponse(candidate)
+
+        if Path(full_path).suffix:
+            raise HTTPException(status_code=404)
+
+        return FileResponse(root / "index.html")
+
 else:
 
     @app.get("/", response_class=HTMLResponse, include_in_schema=False)
