@@ -1,5 +1,6 @@
-import { AiChat01Icon } from "@hugeicons/core-free-icons"
+import { AiChat01Icon, Calculator01Icon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
+import { Link, useMatchRoute } from "@tanstack/react-router"
 
 import {
   Sidebar,
@@ -15,14 +16,13 @@ import {
 } from "@/components/ui/sidebar"
 
 const navItems = [
-  {
-    title: "AI Chat",
-    icon: AiChat01Icon,
-    isActive: true,
-  },
-]
+  { title: "AI Chat", to: "/", icon: AiChat01Icon, exact: true },
+  { title: "DCF Wizard", to: "/wizard", icon: Calculator01Icon, exact: false },
+] as const
 
 export function AppSidebar() {
+  const matchRoute = useMatchRoute()
+
   return (
     <Sidebar>
       <SidebarHeader>
@@ -38,7 +38,11 @@ export function AppSidebar() {
             <SidebarMenu>
               {navItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton isActive={item.isActive} tooltip={item.title}>
+                  <SidebarMenuButton
+                    isActive={matchRoute({ to: item.to, fuzzy: !item.exact }) !== false}
+                    tooltip={item.title}
+                    render={<Link to={item.to} />}
+                  >
                     <HugeiconsIcon icon={item.icon} strokeWidth={2} />
                     <span>{item.title}</span>
                   </SidebarMenuButton>
