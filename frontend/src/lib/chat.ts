@@ -1,5 +1,7 @@
 export type ChatRole = "user" | "assistant";
 
+export type GrowthModel = "fade" | "constant";
+
 export type FilingInfo = {
   accession_number: string;
   form: string;
@@ -28,6 +30,7 @@ export type Assumptions = {
   tax_rate: number;
   tax_rate_source: string;
   growth_rate: number;
+  growth_model: GrowthModel;
   growth_source: string;
   fcff_base: number;
   fcff_base_source: string;
@@ -40,6 +43,20 @@ export type ProjectionYear = {
   fcff: number;
   discount_factor: number;
   present_value: number;
+};
+
+export type EngineInputs = {
+  base_fcff: number;
+  growth_rate: number;
+  growth_model: GrowthModel;
+  terminal_growth_rate: number;
+  projection_years: number;
+  wacc: number;
+  total_debt: number;
+  cash: number;
+  shares_outstanding: number;
+  tax_rate: number;
+  base_year: number;
 };
 
 export type ValuationSummary = {
@@ -76,6 +93,8 @@ export type ValuationResult = {
   assumptions: Assumptions;
   projection: ProjectionYear[];
   valuation: ValuationSummary;
+  engine?: EngineInputs | null;
+  overrides_applied?: string[];
   flags: string[];
   sources: string[];
   source_facts?: SourceFact[];
