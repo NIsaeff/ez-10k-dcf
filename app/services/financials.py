@@ -69,10 +69,17 @@ class CompanyFinancials:
     share_count_source: str
     flags: list[str] = field(default_factory=list)
     sources: list[str] = field(default_factory=list)
+    source_facts: list[dict[str, Any]] = field(default_factory=list)
 
 
-def _debt_series(gaap: dict[str, Any], flags: list[str]) -> dict[int, float]:
-    _total_tag, total = edgar.best_series(
+DebtComponents = list[tuple[str, dict[int, dict[str, Any]]]]
+
+
+def _debt_series(
+    gaap: dict[str, Any], flags: list[str]
+) -> tuple[dict[int, float], DebtComponents]:
+    """Total debt by fiscal year plus the tags/facts behind it."""
+    primary_tag, primary_facts = edgar.best_facts(
         gaap,
         [
             "LongTermDebtAndCapitalLeaseObligationsIncludingCurrentMaturities",
@@ -80,41 +87,157 @@ def _debt_series(gaap: dict[str, Any], flags: list[str]) -> dict[int, float]:
             "LongTermDebt",
         ],
     )
-    if not total:
+    components: DebtComponents = []
+
+    if primary_facts:
+        total = {year: float(row["val"]) for year, row in primary_facts.items()}
+        components.append((primary_tag or "unknown", primary_facts))
+        extra_tags = ["CommercialPaper", "ShortTermBorrowings"]
+    else:
         flags.append("debt_partial")
-        noncurrent = edgar.annual_series(gaap, "LongTermDebtNoncurrent")
-        current = edgar.annual_series(gaap, "LongTermDebtCurrent")
-        short_term = edgar.annual_series(gaap, "ShortTermBorrowings")
-        years = sorted(set(noncurrent) | set(current) | set(short_term))
+        for tag in ("LongTermDebtNoncurrent", "LongTermDebtCurrent", "ShortTermBorrowings"):
+            facts = edgar.annual_facts(gaap, tag)
+            if facts:
+                components.append((tag, facts))
+        years = sorted({year for _, facts in components for year in facts})
         total = {
-            year: (noncurrent.get(year) or 0.0)
-            + (current.get(year) or 0.0)
-            + (short_term.get(year) or 0.0)
+            year: sum(
+                float(facts[year]["val"]) for _, facts in components if year in facts
+            )
             for year in years
         }
+        # ShortTermBorrowings is already inside the partial sum above.
+        extra_tags = ["CommercialPaper"]
 
     # Commercial paper / short-term borrowings are usually outside the long-term
     # debt total, so add them when present.
-    extra_tags = ["CommercialPaper", "ShortTermBorrowings"]
-    extra: dict[int, float] = {}
     for tag in extra_tags:
-        for year, value in edgar.annual_series(gaap, tag).items():
-            extra[year] = extra.get(year, 0.0) + value
-    for year, value in extra.items():
-        if year in total:
-            total[year] += value
+        facts = edgar.annual_facts(gaap, tag)
+        if not facts:
+            continue
+        components.append((tag, facts))
+        for year, row in facts.items():
+            if year in total:
+                total[year] += float(row["val"])
 
-    return total
+    return total, components
 
 
-def _share_series(gaap: dict[str, Any], dei: dict[str, Any]) -> tuple[str, dict[int, float]]:
-    tag, values = edgar.best_series(gaap, SHARE_TAGS, unit="shares")
-    if values:
-        return tag or "unknown", values
-    dei_values = edgar.annual_series(dei, "EntityCommonStockSharesOutstanding", unit="shares")
-    if dei_values:
-        return "dei:EntityCommonStockSharesOutstanding", dei_values
-    return "missing", {}
+def _share_series(
+    gaap: dict[str, Any], dei: dict[str, Any]
+) -> tuple[str, dict[int, float], dict[int, dict[str, Any]]]:
+    tag, facts = edgar.best_facts(gaap, SHARE_TAGS, unit="shares")
+    if facts:
+        return tag or "unknown", {year: float(row["val"]) for year, row in facts.items()}, facts
+    dei_facts = edgar.annual_facts(dei, "EntityCommonStockSharesOutstanding", unit="shares")
+    if dei_facts:
+        return (
+            "dei:EntityCommonStockSharesOutstanding",
+            {year: float(row["val"]) for year, row in dei_facts.items()},
+            dei_facts,
+        )
+    return "missing", {}, {}
+
+
+def _fact_rows(
+    *,
+    cik: str,
+    filing: FilingInfo,
+    metric: str,
+    tag: str,
+    facts: dict[int, dict[str, Any]],
+    years: list[int] | tuple[int, ...],
+    unit: str = "USD",
+) -> list[dict[str, Any]]:
+    """Flatten selected XBRL facts into provenance rows for the drill-down."""
+    rows: list[dict[str, Any]] = []
+    for year in years:
+        fact = facts.get(year)
+        if fact is None:
+            continue
+        accession = fact.get("accn") or filing.accession_number
+        rows.append(
+            {
+                "metric": metric,
+                "tag": tag,
+                "fiscal_year": int(year),
+                "value": float(fact["val"]),
+                "unit": unit,
+                "end": fact.get("end"),
+                "filed": fact.get("filed"),
+                "form": fact.get("form") or filing.form,
+                "accession_number": accession,
+                "url": edgar.filing_index_url(cik, accession),
+            }
+        )
+    return rows
+
+
+def _collect_source_facts(
+    *,
+    cik: str,
+    filing: FilingInfo,
+    series_facts: dict[str, tuple[str, dict[int, dict[str, Any]]]],
+    debt_components: DebtComponents,
+    share_source: str,
+    share_facts: dict[int, dict[str, Any]],
+    years: list[int],
+    latest_year: int,
+) -> list[dict[str, Any]]:
+    """Provenance for every number the DCF consumes.
+
+    Flow metrics get one row per history year; balance-sheet and share-count
+    inputs only need the latest fiscal year, which is the one the DCF uses.
+    """
+    rows: list[dict[str, Any]] = []
+    for metric, (tag, facts) in series_facts.items():
+        if metric == "cash":
+            continue
+        rows.extend(
+            _fact_rows(
+                cik=cik,
+                filing=filing,
+                metric=metric,
+                tag=tag,
+                facts=facts,
+                years=years,
+            )
+        )
+
+    cash_tag, cash_facts = series_facts["cash"]
+    rows.extend(
+        _fact_rows(
+            cik=cik,
+            filing=filing,
+            metric="cash",
+            tag=cash_tag,
+            facts=cash_facts,
+            years=[latest_year],
+        )
+    )
+    for tag, facts in debt_components:
+        rows.extend(
+            _fact_rows(
+                cik=cik,
+                filing=filing,
+                metric="total_debt",
+                tag=tag,
+                facts=facts,
+                years=[latest_year],
+            )
+        )
+    rows.extend(
+        _fact_rows(
+            cik=cik,
+            filing=filing,
+            metric="shares_outstanding",
+            tag=share_source,
+            facts=share_facts,
+            years=[latest_year],
+            unit="shares",
+        )
+    )
+    return rows
 
 
 def build_from_facts(
@@ -130,15 +253,16 @@ def build_from_facts(
     flags: list[str] = []
 
     series: dict[str, dict[int, float]] = {}
+    series_facts: dict[str, tuple[str, dict[int, dict[str, Any]]]] = {}
     for metric, tags in METRIC_TAGS.items():
-        tag, values = edgar.best_series(gaap, tags)
-        series[metric] = values
-        if not values and metric == "revenue":
+        tag, facts = edgar.best_facts(gaap, tags)
+        series[metric] = {year: float(row["val"]) for year, row in facts.items()}
+        series_facts[metric] = (tag or "unknown", facts)
+        if not facts and metric == "revenue":
             flags.append("revenue_missing")
-        _ = tag
 
-    debt = _debt_series(gaap, flags)
-    share_source, shares = _share_series(gaap, dei)
+    debt, debt_components = _debt_series(gaap, flags)
+    share_source, shares, share_facts = _share_series(gaap, dei)
 
     years = sorted(
         set(series["ebit"])
@@ -192,6 +316,17 @@ def build_from_facts(
         filing.url,
     ]
 
+    source_facts = _collect_source_facts(
+        cik=cik,
+        filing=filing,
+        series_facts=series_facts,
+        debt_components=debt_components,
+        share_source=share_source,
+        share_facts=share_facts,
+        years=years,
+        latest_year=latest_year,
+    )
+
     return CompanyFinancials(
         ticker=ticker,
         company_name=company_name,
@@ -204,6 +339,7 @@ def build_from_facts(
         share_count_source=share_source,
         flags=flags,
         sources=sources,
+        source_facts=source_facts,
     )
 
 

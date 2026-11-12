@@ -93,11 +93,14 @@ def companyfacts(cik: int) -> dict[str, Any]:
     return _get_json(COMPANYFACTS_URL.format(cik=cik), f"companyfacts_{cik:010d}.json")
 
 
-def annual_series(gaap: dict[str, Any], tag: str, unit: str = "USD") -> dict[int, float]:
-    """Map fiscal year -> value for annual 10-K facts.
+def annual_facts(
+    gaap: dict[str, Any], tag: str, unit: str = "USD"
+) -> dict[int, dict[str, Any]]:
+    """Map fiscal year -> the winning annual 10-K fact for that year.
 
     Deduplicates by (fy, end) preferring the latest filing, then by fy preferring
-    the latest period end.
+    the latest period end. Keeps the whole fact row (val, end, filed, accn) so
+    callers can show provenance, not just the number.
     """
     units = gaap.get(tag, {}).get("units", {}).get(unit, [])
     rows = [
@@ -114,11 +117,34 @@ def annual_series(gaap: dict[str, Any], tag: str, unit: str = "USD") -> dict[int
         if key not in best or str(row.get("filed", "")) > str(best[key].get("filed", "")):
             best[key] = row
 
-    result: dict[int, float] = {}
+    result: dict[int, dict[str, Any]] = {}
     for (fiscal_year, end), row in sorted(best.items(), key=lambda item: (item[0][1], item[0][0])):
-        result[fiscal_year] = float(row["val"])
-        _ = end
+        result[fiscal_year] = row
     return result
+
+
+def annual_series(gaap: dict[str, Any], tag: str, unit: str = "USD") -> dict[int, float]:
+    """Map fiscal year -> value for annual 10-K facts."""
+    return {year: float(row["val"]) for year, row in annual_facts(gaap, tag, unit).items()}
+
+
+def best_facts(
+    gaap: dict[str, Any],
+    tags: list[str],
+    unit: str = "USD",
+) -> tuple[str | None, dict[int, dict[str, Any]]]:
+    """Pick the candidate tag with the most recent coverage, then the most years."""
+    best_tag: str | None = None
+    best_rows: dict[int, dict[str, Any]] = {}
+    best_score = (-1, -1)
+    for tag in tags:
+        rows = annual_facts(gaap, tag, unit)
+        if not rows:
+            continue
+        score = (max(rows), len(rows))
+        if score > best_score:
+            best_tag, best_rows, best_score = tag, rows, score
+    return best_tag, best_rows
 
 
 def best_series(
@@ -126,15 +152,13 @@ def best_series(
     tags: list[str],
     unit: str = "USD",
 ) -> tuple[str | None, dict[int, float]]:
-    """Pick the candidate tag with the most recent coverage, then the most years."""
-    best_tag: str | None = None
-    best_values: dict[int, float] = {}
-    best_score = (-1, -1)
-    for tag in tags:
-        values = annual_series(gaap, tag, unit)
-        if not values:
-            continue
-        score = (max(values), len(values))
-        if score > best_score:
-            best_tag, best_values, best_score = tag, values, score
-    return best_tag, best_values
+    tag, rows = best_facts(gaap, tags, unit)
+    return tag, {year: float(row["val"]) for year, row in rows.items()}
+
+
+def filing_index_url(cik: str, accession_number: str) -> str:
+    """SEC filing index page for an accession (the folder holding the XBRL files)."""
+    return (
+        f"https://www.sec.gov/Archives/edgar/data/{int(cik)}/"
+        f"{accession_number.replace('-', '')}/"
+    )

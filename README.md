@@ -4,8 +4,8 @@ Capstone project for the Parsity Dev Accelerator: enter a ticker, pull the compa
 latest 10-K financials from SEC EDGAR, and compute a discounted cash flow valuation in
 the chat UI.
 
-**Status:** phases 1–6 complete (backend, DCF, SEC extraction, API, UI, QA). Submission
-artifacts (assignment writeup + demo video) remain.
+**Status:** phases 1–7 complete (backend, DCF, SEC extraction, API, UI, QA, drill-down
+provenance). Submission artifacts (assignment writeup + demo video) remain.
 
 ## Supported tickers
 
@@ -52,6 +52,8 @@ React chat (Vite) ──/api/chat──▶ FastAPI
 
 - **Numbers are deterministic.** `app/services/dcf.py` is pure Python; the LLM only
   formats the finished result.
+- **Every number is traceable.** `source_facts` records the XBRL tag, period, filing
+  date, and accession behind each input, and the card expands to show them.
 - **Fail loudly.** Missing required data returns `422` with `missing_fields`.
 - **Cache.** SEC responses live in `data/raw/` (gitignored); tests use trimmed fixtures.
 

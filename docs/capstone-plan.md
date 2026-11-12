@@ -1,6 +1,6 @@
 # EZ-10k — Capstone Plan
 
-Status: v0.2 (phases 1–6 complete; submission pending). Owner: capstone repo
+Status: v0.3 (phases 1–7 complete; submission pending). Owner: capstone repo
 (`parsity_capstone_10k_dcf`).
 
 ## Product
@@ -100,9 +100,18 @@ Config is read through `pydantic-settings`; `.env.example` documents names only.
     `docs/qa-report.md`)**
 18. Add disclaimer (“not investment advice”), net-debt/share-count checks. **(done)**
 
-### Phase 7 — Submission
+### Phase 7 — Drill-down provenance
 
-19. README, `assignments/day-36_capstone-kickoff/{README,VIDEO}.md`, PROGRESS 36–39,
+19. `edgar.py`/`financials.py` keep the winning fact per `(metric, fiscal_year)`: tag,
+    value, period end, filed date, accession. `ValuationResult.source_facts` exposes
+    them; nothing in the DCF math changes. **(done)**
+20. `ValuationCard` gains a "How this adds up" EV → equity → per-share chain and
+    expandable XBRL input groups; each fact links to the SEC filing that reported it.
+    **(done)**
+
+### Phase 8 — Submission
+
+21. README, `assignments/day-36_capstone-kickoff/{README,VIDEO}.md`, PROGRESS 36–39,
     Feynman note, demo video.
 
 ## Anticipated blockers → unblock

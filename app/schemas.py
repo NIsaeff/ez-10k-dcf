@@ -22,6 +22,21 @@ class FilingInfo(BaseModel):
     url: str
 
 
+class SourceFact(BaseModel):
+    """One XBRL fact behind a DCF input, for click-through provenance."""
+
+    metric: str
+    tag: str
+    fiscal_year: int
+    value: float
+    unit: str = "USD"
+    end: str | None = None
+    filed: str | None = None
+    form: str | None = None
+    accession_number: str | None = None
+    url: str
+
+
 class YearFinancials(BaseModel):
     fiscal_year: int
     revenue: float | None = None
@@ -79,6 +94,7 @@ class ValuationResult(BaseModel):
     valuation: ValuationSummary
     flags: list[str]
     sources: list[str]
+    source_facts: list[SourceFact] = Field(default_factory=list)
     disclaimer: str
 
 

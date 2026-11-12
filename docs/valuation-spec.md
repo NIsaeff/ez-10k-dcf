@@ -100,9 +100,31 @@ latest fiscal year.
     "https://data.sec.gov/api/xbrl/companyfacts/CIK0000021344.json",
     "https://www.sec.gov/Archives/edgar/data/21344/..."
   ],
+  "source_facts": [
+    {
+      "metric": "ebit",
+      "tag": "OperatingIncomeLoss",
+      "fiscal_year": 2024,
+      "value": 10394000000,
+      "unit": "USD",
+      "end": "2024-12-31",
+      "filed": "2025-02-20",
+      "form": "10-K",
+      "accession_number": "0000021344-25-000011",
+      "url": "https://www.sec.gov/Archives/edgar/data/21344/000002134425000011/"
+    }
+  ],
   "disclaimer": "Illustrative valuation, not investment advice."
 }
 ```
+
+`source_facts` is provenance for the drill-down: one row per `(metric, tag, fiscal_year)`
+that produced a DCF input. Flow metrics emit a row per history year; balance-sheet and
+share-count inputs emit the latest fiscal year only. `total_debt` may emit several rows
+(the primary debt tag plus `CommercialPaper` / `ShortTermBorrowings`), and their values
+sum to `valuation.total_debt`. `url` is the SEC filing index page for the fact's own
+`accn`, so each number links back to the filing that reported it. It is additive and
+optional; consumers must tolerate an empty list.
 
 Validation rules:
 

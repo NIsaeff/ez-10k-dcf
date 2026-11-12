@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.schemas import Assumptions, ValuationResult
+from app.schemas import Assumptions, SourceFact, ValuationResult
 from app.services import dcf, financials
 
 SUPPORTED_TICKERS = [
@@ -125,5 +125,6 @@ def analyze_from_company(company: financials.CompanyFinancials) -> ValuationResu
         valuation=summary,
         flags=flags,
         sources=company.sources,
+        source_facts=[SourceFact(**row) for row in company.source_facts],
         disclaimer=DISCLAIMER,
     )

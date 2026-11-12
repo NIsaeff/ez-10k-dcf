@@ -54,6 +54,19 @@ export type ValuationSummary = {
   value_per_share: number;
 };
 
+export type SourceFact = {
+  metric: string;
+  tag: string;
+  fiscal_year: number;
+  value: number;
+  unit: string;
+  end: string | null;
+  filed: string | null;
+  form: string | null;
+  accession_number: string | null;
+  url: string;
+};
+
 export type ValuationResult = {
   ticker: string;
   company_name: string;
@@ -65,6 +78,7 @@ export type ValuationResult = {
   valuation: ValuationSummary;
   flags: string[];
   sources: string[];
+  source_facts?: SourceFact[];
   disclaimer: string;
 };
 
