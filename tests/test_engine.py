@@ -14,6 +14,7 @@ def test_engine_matches_assumptions() -> None:
 
     assert engine is not None
     assert engine.wacc == result.assumptions.wacc
+    assert engine.base_wacc == valuation.WACC_DEFAULTS[result.ticker]
     assert engine.base_fcff == result.assumptions.fcff_base
     assert engine.growth_model == result.assumptions.growth_model
     assert engine.terminal_growth_rate == result.assumptions.terminal_growth_rate

@@ -52,6 +52,7 @@ export type EngineInputs = {
   terminal_growth_rate: number;
   projection_years: number;
   wacc: number;
+  base_wacc: number;
   total_debt: number;
   cash: number;
   shares_outstanding: number;

@@ -1,3 +1,4 @@
+import type { DcfOverrides } from "@/lib/api"
 import { SUPPORTED_TICKERS, type Ticker } from "@/lib/tickers"
 
 export type GrowthModel = "fade" | "constant"
@@ -63,4 +64,14 @@ export function validateWizardSearch(
 /** Percent form -> decimal rate for the API. */
 export function toRate(percent: number): number {
   return Math.round((percent / 100) * 1e6) / 1e6
+}
+
+/** Search params -> engine overrides. Fields equal to the defaults are harmless. */
+export function overridesFromSearch(search: WizardSearch): DcfOverrides {
+  return {
+    projection_years: search.years,
+    terminal_growth_rate: toRate(search.terminal),
+    growth_model: search.model,
+    ...(search.wacc === undefined ? {} : { wacc: toRate(search.wacc) }),
+  }
 }

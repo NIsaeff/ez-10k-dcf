@@ -180,6 +180,7 @@ def analyze_from_company(
         terminal_growth_rate=terminal_growth,
         projection_years=years,
         wacc=wacc,
+        base_wacc=WACC_DEFAULTS[ticker],
         total_debt=company.total_debt,
         cash=company.cash_and_equivalents,
         shares_outstanding=company.shares_outstanding,

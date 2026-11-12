@@ -79,6 +79,7 @@ class EngineInputs(BaseModel):
     terminal_growth_rate: float
     projection_years: int
     wacc: float
+    base_wacc: float
     total_debt: float
     cash: float
     shares_outstanding: float

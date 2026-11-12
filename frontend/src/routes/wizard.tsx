@@ -1,14 +1,26 @@
 import { createFileRoute } from "@tanstack/react-router"
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 
 import { ModeToggle } from "@/components/mode-toggle"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { DcfPanel } from "@/components/wizard/DcfPanel"
 import { FcffPanel } from "@/components/wizard/FcffPanel"
 import { TickerBar } from "@/components/wizard/TickerBar"
-import { analyzeTicker } from "@/lib/api"
+import {
+  fetchSensitivity,
+  recalcDcf,
+  type SensitivityGrid,
+} from "@/lib/api"
 import type { ValuationResult } from "@/lib/chat"
-import { validateWizardSearch } from "@/lib/wizard-state"
+import { withPreview } from "@/lib/preview"
+import {
+  overridesFromSearch,
+  validateWizardSearch,
+  type WizardSearch,
+} from "@/lib/wizard-state"
+
+const DEBOUNCE_MS = 250
 
 export const Route = createFileRoute("/wizard")({
   validateSearch: validateWizardSearch,
@@ -20,31 +32,63 @@ function WizardPage() {
   const navigate = Route.useNavigate()
 
   const [valuation, setValuation] = useState<ValuationResult | null>(null)
+  const [grid, setGrid] = useState<SensitivityGrid | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [pending, setPending] = useState(true)
+
+  const { ticker, years, terminal, model, wacc } = search
 
   useEffect(() => {
     let cancelled = false
-    setLoading(true)
-    setError(null)
+    setPending(true)
 
-    analyzeTicker(search.ticker)
-      .then((result) => {
-        if (!cancelled) setValuation(result)
-      })
-      .catch((cause: unknown) => {
-        if (cancelled) return
-        setValuation(null)
-        setError(cause instanceof Error ? cause.message : String(cause))
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
+    const overrides = overridesFromSearch({
+      ticker,
+      years,
+      terminal,
+      model,
+      wacc,
+    })
+
+    const timer = setTimeout(() => {
+      Promise.all([
+        recalcDcf(ticker, overrides),
+        fetchSensitivity(ticker, overrides),
+      ])
+        .then(([result, nextGrid]) => {
+          if (cancelled) return
+          setValuation(result)
+          setGrid(nextGrid)
+          setError(null)
+        })
+        .catch((cause: unknown) => {
+          if (cancelled) return
+          setValuation(null)
+          setGrid(null)
+          setError(cause instanceof Error ? cause.message : String(cause))
+        })
+        .finally(() => {
+          if (!cancelled) setPending(false)
+        })
+    }, DEBOUNCE_MS)
 
     return () => {
       cancelled = true
+      clearTimeout(timer)
     }
-  }, [search.ticker])
+  }, [ticker, years, terminal, model, wacc])
+
+  const previewed = useMemo(
+    () => (valuation ? withPreview(valuation, search) : null),
+    [valuation, search],
+  )
+
+  const update = (patch: Partial<WizardSearch>) =>
+    navigate({
+      to: "/wizard",
+      search: (previous) => ({ ...previous, ...patch }),
+      replace: true,
+    })
 
   return (
     <>
@@ -62,14 +106,9 @@ function WizardPage() {
         </div>
         <div className="flex items-center gap-2">
           <TickerBar
-            ticker={search.ticker}
-            disabled={loading}
-            onChange={(ticker) =>
-              navigate({
-                to: "/wizard",
-                search: (previous) => ({ ...previous, ticker }),
-              })
-            }
+            ticker={ticker}
+            disabled={pending}
+            onChange={(next) => update({ ticker: next })}
           />
           <ModeToggle />
         </div>
@@ -79,18 +118,16 @@ function WizardPage() {
         <div className="mx-auto w-full max-w-5xl">
           {error ? (
             <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm">
-              <p className="font-medium">Could not load {search.ticker}</p>
+              <p className="font-medium">Could not load {ticker}</p>
               <p className="text-xs text-muted-foreground">{error}</p>
             </div>
           ) : null}
 
-          {loading ? (
-            <p className="text-sm text-muted-foreground">
-              Loading {search.ticker}…
-            </p>
+          {!valuation && pending ? (
+            <p className="text-sm text-muted-foreground">Loading {ticker}…</p>
           ) : null}
 
-          {valuation ? (
+          {valuation && previewed ? (
             <Tabs defaultValue="fcff">
               <TabsList>
                 <TabsTrigger value="fcff">FCFF</TabsTrigger>
@@ -109,10 +146,13 @@ function WizardPage() {
               </TabsContent>
 
               <TabsContent value="dcf" className="mt-4">
-                <p className="text-sm text-muted-foreground">
-                  Assumption controls and the sensitivity grid land in the next
-                  phase.
-                </p>
+                <DcfPanel
+                  valuation={previewed}
+                  search={search}
+                  onChange={update}
+                  grid={grid}
+                  pending={pending}
+                />
               </TabsContent>
             </Tabs>
           ) : null}

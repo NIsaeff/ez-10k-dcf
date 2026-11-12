@@ -1,0 +1,173 @@
+{
+  "AAPL": {
+    "engine": {
+      "base_fcff": 103674585964.96844,
+      "growth_rate": 0.007858085269922155,
+      "growth_model": "fade",
+      "terminal_growth_rate": 0.025,
+      "projection_years": 5,
+      "wacc": 0.08,
+      "base_wacc": 0.08,
+      "total_debt": 80111000000.0,
+      "cash": 36305000000.0,
+      "shares_outstanding": 14720306000.0,
+      "tax_rate": 0.169947939235228,
+      "base_year": 2026
+    },
+    "value_per_share": 123.13634804248753,
+    "enterprise_value": 1856410722907.9175,
+    "equity_value": 1812604722907.9175
+  },
+  "AMZN": {
+    "engine": {
+      "base_fcff": 16918802831.152704,
+      "growth_rate": 0.05,
+      "growth_model": "fade",
+      "terminal_growth_rate": 0.025,
+      "projection_years": 5,
+      "wacc": 0.09,
+      "base_wacc": 0.09,
+      "total_debt": 69291000000.0,
+      "cash": 86810000000.0,
+      "shares_outstanding": 10827000000.0,
+      "tax_rate": 0.19614432078593375,
+      "base_year": 2025
+    },
+    "value_per_share": 27.704223646988243,
+    "enterprise_value": 282434629425.9417,
+    "equity_value": 299953629425.9417
+  },
+  "GOOGL": {
+    "engine": {
+      "base_fcff": 62040345786.71583,
+      "growth_rate": 0.0895208401271983,
+      "growth_model": "fade",
+      "terminal_growth_rate": 0.025,
+      "projection_years": 5,
+      "wacc": 0.085,
+      "base_wacc": 0.085,
+      "total_debt": 49085000000.0,
+      "cash": 30708000000.0,
+      "shares_outstanding": 12230000000.0,
+      "tax_rate": 0.16783146336242177,
+      "base_year": 2025
+    },
+    "value_per_share": 98.75077306936508,
+    "enterprise_value": 1226098954638.335,
+    "equity_value": 1207721954638.335
+  },
+  "KO": {
+    "engine": {
+      "base_fcff": 8635334328.261444,
+      "growth_rate": 0.012443270781988813,
+      "growth_model": "fade",
+      "terminal_growth_rate": 0.025,
+      "projection_years": 5,
+      "wacc": 0.075,
+      "base_wacc": 0.075,
+      "total_debt": 45436000000.0,
+      "cash": 10270000000.0,
+      "shares_outstanding": 4313000000.0,
+      "tax_rate": 0.1788348543567946,
+      "base_year": 2025
+    },
+    "value_per_share": 31.703221319821445,
+    "enterprise_value": 171901993552.3899,
+    "equity_value": 136735993552.3899
+  },
+  "META": {
+    "engine": {
+      "base_fcff": 15688912264.823141,
+      "growth_rate": -0.13732996739130987,
+      "growth_model": "fade",
+      "terminal_growth_rate": 0.025,
+      "projection_years": 5,
+      "wacc": 0.09,
+      "base_wacc": 0.09,
+      "total_debt": 58744000000.0,
+      "cash": 35873000000.0,
+      "shares_outstanding": 2574000000.0,
+      "tax_rate": 0.2964436996695061,
+      "base_year": 2025
+    },
+    "value_per_share": 55.82031297489052,
+    "enterprise_value": 166552485597.3682,
+    "equity_value": 143681485597.3682
+  },
+  "MSFT": {
+    "engine": {
+      "base_fcff": 63699384243.45089,
+      "growth_rate": 0.010211257607981361,
+      "growth_model": "fade",
+      "terminal_growth_rate": 0.025,
+      "projection_years": 5,
+      "wacc": 0.08,
+      "base_wacc": 0.08,
+      "total_debt": 40294000000.0,
+      "cash": 20935000000.0,
+      "shares_outstanding": 7453000000.0,
+      "tax_rate": 0.19396265985271252,
+      "base_year": 2026
+    },
+    "value_per_share": 151.28926738743226,
+    "enterprise_value": 1146917909838.5327,
+    "equity_value": 1127558909838.5327
+  },
+  "NVDA": {
+    "engine": {
+      "base_fcff": 48286405644.58252,
+      "growth_rate": 0.2939304288393456,
+      "growth_model": "fade",
+      "terminal_growth_rate": 0.025,
+      "projection_years": 5,
+      "wacc": 0.095,
+      "base_wacc": 0.095,
+      "total_debt": 8468000000.0,
+      "cash": 10605000000.0,
+      "shares_outstanding": 24514000000.0,
+      "tax_rate": 0.1511700247437257,
+      "base_year": 2026
+    },
+    "value_per_share": 50.86494790593002,
+    "enterprise_value": 1244766332965.9685,
+    "equity_value": 1246903332965.9685
+  },
+  "PWR": {
+    "engine": {
+      "base_fcff": 1536377058.6998167,
+      "growth_rate": 0.3,
+      "growth_model": "fade",
+      "terminal_growth_rate": 0.025,
+      "projection_years": 5,
+      "wacc": 0.09,
+      "base_wacc": 0.09,
+      "total_debt": 5994906000.0,
+      "cash": 439508000.0,
+      "shares_outstanding": 151291000.0,
+      "tax_rate": 0.25015239239873194,
+      "base_year": 2025
+    },
+    "value_per_share": 249.18702823295493,
+    "enterprise_value": 43255152688.39198,
+    "equity_value": 37699754688.39198
+  },
+  "TSLA": {
+    "engine": {
+      "base_fcff": 1105181149.171227,
+      "growth_rate": -0.026824332412425322,
+      "growth_model": "fade",
+      "terminal_growth_rate": 0.025,
+      "projection_years": 5,
+      "wacc": 0.1,
+      "base_wacc": 0.1,
+      "total_debt": 6584000000.0,
+      "cash": 16513000000.0,
+      "shares_outstanding": 3528000000.0,
+      "tax_rate": 0.2696097006441834,
+      "base_year": 2025
+    },
+    "value_per_share": 6.610652548658507,
+    "enterprise_value": 13393382191.667215,
+    "equity_value": 23322382191.667213
+  }
+}

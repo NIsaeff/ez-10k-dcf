@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "check:parity": "bun scripts/check-parity.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
