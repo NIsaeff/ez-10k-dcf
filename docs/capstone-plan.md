@@ -58,11 +58,11 @@ Config is read through `pydantic-settings`; `.env.example` documents names only.
 ### Phase 1 — Contract + transport
 
 1. Freeze schema/formulas in `docs/valuation-spec.md`. **(done)**
-2. Add `pydantic-settings`, `openai`, `pytest`; add `app/config.py`.
-3. Copy provider config into `.env`; placeholders in `.env.example`.
+2. Add `pydantic-settings`, `openai`, `pytest`; add `app/config.py`. **(done)**
+3. Copy provider config into `.env`; placeholders in `.env.example`. **(done)**
 4. Uncomment `/api/chat`; add request/response models; echo last message; verify
-   `POST /api/chat → 200`.
-5. `app/llm.py` client factory + one-shot smoke-test script.
+   `POST /api/chat → 200`. **(done)**
+5. `app/llm.py` client factory + one-shot smoke-test script. **(done)**
 
 ### Phase 2 — DCF math
 
