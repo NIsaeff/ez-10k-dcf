@@ -7,10 +7,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { DcfPanel } from "@/components/wizard/DcfPanel"
 import { FcffPanel } from "@/components/wizard/FcffPanel"
 import { TickerBar } from "@/components/wizard/TickerBar"
+import { WaccPanel } from "@/components/wizard/WaccPanel"
 import {
   fetchSensitivity,
+  fetchWacc,
   recalcDcf,
   type SensitivityGrid,
+  type WaccBreakdown,
 } from "@/lib/api"
 import type { ValuationResult } from "@/lib/chat"
 import { withPreview } from "@/lib/preview"
@@ -33,6 +36,7 @@ function WizardPage() {
 
   const [valuation, setValuation] = useState<ValuationResult | null>(null)
   const [grid, setGrid] = useState<SensitivityGrid | null>(null)
+  const [waccData, setWaccData] = useState<WaccBreakdown | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState(true)
 
@@ -77,6 +81,21 @@ function WizardPage() {
       clearTimeout(timer)
     }
   }, [ticker, years, terminal, model, wacc])
+
+  useEffect(() => {
+    let cancelled = false
+    setWaccData(null)
+    fetchWacc(ticker)
+      .then((data) => {
+        if (!cancelled) setWaccData(data)
+      })
+      .catch(() => {
+        if (!cancelled) setWaccData(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [ticker])
 
   const previewed = useMemo(
     () => (valuation ? withPreview(valuation, search) : null),
@@ -140,9 +159,10 @@ function WizardPage() {
               </TabsContent>
 
               <TabsContent value="wacc" className="mt-4">
-                <p className="text-sm text-muted-foreground">
-                  CAPM decomposition lands in the next phase.
-                </p>
+                <WaccPanel
+                  wacc={waccData}
+                  onApply={(percent) => update({ wacc: percent })}
+                />
               </TabsContent>
 
               <TabsContent value="dcf" className="mt-4">

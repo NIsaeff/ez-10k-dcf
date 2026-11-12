@@ -4,9 +4,8 @@ Capstone project for the Parsity Dev Accelerator: enter a ticker, pull the compa
 latest 10-K financials from SEC EDGAR, and compute a discounted cash flow valuation in
 the chat UI.
 
-**Status:** phases 1–7 complete (backend, DCF, SEC extraction, API, UI, QA, drill-down
-provenance). Phase 8 (DCF Wizard) backend is in; the wizard UI is next. Submission
-artifacts (assignment writeup + demo video) remain.
+**Status:** phases 1–8 complete (backend, DCF, SEC extraction, API, UI, QA, drill-down
+provenance, DCF Wizard). Submission artifacts (assignment writeup + demo video) remain.
 
 ## Supported tickers
 
@@ -56,7 +55,10 @@ React chat (Vite) ──/api/chat──▶ FastAPI
 - **Every number is traceable.** `source_facts` records the XBRL tag, period, filing
   date, and accession behind each input, and the card expands to show them.
 - **Fail loudly.** Missing required data returns `422` with `missing_fields`.
-- **Cache.** SEC responses live in `data/raw/` (gitignored); tests use trimmed fixtures.
+- **Cache.** SEC and Yahoo responses live in `data/raw/` (gitignored); tests use trimmed
+  fixtures and never touch the network.
+- **Market inputs.** Beta, price and the risk-free rate come from Yahoo; cost of debt
+  comes from SEC `InterestExpense`. Every CAPM input carries a `source` string.
 
 ## API
 
@@ -69,6 +71,9 @@ React chat (Vite) ──/api/chat──▶ FastAPI
 | `POST /api/chat` | `{messages}` → `{reply, valuation}`; detects allowlisted tickers |
 | `GET /api/health` | status, model, supported tickers |
 | `GET /docs` | Swagger UI |
+
+Routes: `/` is the chat, `/wizard` is the DCF Wizard (FCFF, WACC, DCF tabs; state lives
+in search params so a valuation is linkable).
 
 ## Layout
 
