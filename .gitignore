@@ -31,3 +31,5 @@ opencode.jsonc
 .idea/
 .vscode/
 *.swp
+
+data/xbrl/
