@@ -1,6 +1,7 @@
 # EZ-10k — Capstone Plan
 
-Status: v0.1 (planning). Owner: capstone repo (`parsity_capstone_10k_dcf`).
+Status: v0.2 (phases 1–6 complete; submission pending). Owner: capstone repo
+(`parsity_capstone_10k_dcf`).
 
 ## Product
 
@@ -67,36 +68,37 @@ Config is read through `pydantic-settings`; `.env.example` documents names only.
 ### Phase 2 — DCF math
 
 6. `app/services/dcf.py`: pure functions — FCFF, growth fade, projection, terminal
-   value, EV→equity→per-share.
-7. `tests/test_dcf.py`: known values, `wacc <= g`, negative FCFF, zero shares.
+   value, EV→equity→per-share. **(done)**
+7. `tests/test_dcf.py`: known values, `wacc <= g`, negative FCFF, zero shares. **(done)**
 
 ### Phase 3 — EDGAR extraction (long pole)
 
 8. `app/services/edgar.py`: ticker→CIK (cached `company_tickers.json`), submissions,
-   `companyfacts`, annual-fact selection, raw cache in `data/raw/`.
+   `companyfacts`, annual-fact selection, raw cache in `data/raw/`. **(done)**
 9. `app/services/financials.py`: per-metric tag fallbacks, 5-year history, USD
-   normalization, flags.
-10. `tests/fixtures/{ticker}.json` + `tests/test_extraction.py` for all 9 tickers.
+   normalization, flags. **(done)**
+10. `tests/fixtures/{ticker}.json` + `tests/test_extraction.py` for all 9 tickers. **(done)**
 
 ### Phase 4 — Pipeline + API
 
-11. `app/services/valuation.py`: ticker → filing → history → assumptions → DCF.
-12. `POST /api/analyze/{ticker}` (deterministic) and `/api/chat` (ticker + narrative).
-13. API tests with `TestClient`; chat tested against a fake LLM.
+11. `app/services/valuation.py`: ticker → filing → history → assumptions → DCF. **(done)**
+12. `POST /api/analyze/{ticker}` (deterministic) and `/api/chat` (ticker + narrative). **(done)**
+13. API tests with `TestClient`; chat tested against a fake LLM. **(done)**
 
 ### Phase 5 — UI
 
 14. `frontend/src/lib/chat.ts`: `ValuationResult` types; `sendChat` returns
-    `{ reply, valuation }`.
+    `{ reply, valuation }`. **(done)**
 15. `ValuationCard`: history, assumptions, WACC, terminal value, EV, equity,
-    per-share, flags, filing source.
+    per-share, flags, filing source. **(done)**
 16. `App.tsx`: render the card under the assistant message, ticker chips, error state;
-    rebuild `frontend/dist`.
+    rebuild `frontend/dist`. **(done)**
 
 ### Phase 6 — QA across the universe
 
-17. Run all 9 tickers; record pass/fail/flags; fix tag fallbacks.
-18. Add disclaimer (“not investment advice”), net-debt/share-count checks.
+17. Run all 9 tickers; record pass/fail/flags; fix tag fallbacks. **(done — see
+    `docs/qa-report.md`)**
+18. Add disclaimer (“not investment advice”), net-debt/share-count checks. **(done)**
 
 ### Phase 7 — Submission
 

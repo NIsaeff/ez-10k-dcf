@@ -136,7 +136,7 @@ A working-capital release (negative delta) increases FCFF.
 ### 3. Growth
 
 ```
-g_hist = (fcff_latest / fcff_oldest) ** (1 / (n - 1)) - 1
+g_hist = (fcff_base / fcff_oldest) ** (1 / (n - 1)) - 1
 g_hist = clamp(g_hist, -0.20, 0.30)
 ```
 
@@ -151,9 +151,13 @@ g_i = g_hist + (terminal_growth_rate - g_hist) * (i - 1) / (N - 1)
 
 ### 4. FCFF base and projection
 
-`fcff_base` = latest FCFF if positive, else the mean of positive years in the last 3,
-else latest FCFF. Default path flags `fcff_base_3yr_avg` when averaged; negative base
-flags `negative_fcff`.
+`fcff_base` = mean of positive FCFF over the last up to 5 years, **excluding values
+outside 0.5x–2x the median** (one capex/working-capital spike should not dominate the
+valuation). Flag `fcff_base_normalized` when this path is used.
+
+If the recent window has no positive years, use the mean of all positive years
+(`fcff_base_positive_avg`). If the company has no positive FCFF at all, use the latest
+value and flag `negative_fcff`.
 
 ```
 fcff_1 = fcff_base * (1 + g_1)
@@ -247,9 +251,10 @@ pure Python (no LLM, no network) and covered by tests. The LLM receives the fini
 
 ## Flags
 
-`tax_rate_default`, `nwc_unavailable`, `growth_default`, `fcff_base_3yr_avg`,
-`negative_fcff`, `multi_class_shares`, `shares_from_dei`, `debt_partial`,
-`revenue_missing`, `history_lt_3y`, `wacc_manual_default`, `negative_equity`.
+`tax_rate_default`, `nwc_unavailable`, `growth_default`, `fcff_base_normalized`,
+`fcff_base_positive_avg`, `negative_fcff`, `multi_class_shares`, `shares_from_dei`,
+`shares_from_basic`, `debt_partial`, `debt_missing`, `revenue_missing`,
+`history_lt_3y`, `wacc_manual_default`, `negative_equity`.
 
 ## Open questions
 

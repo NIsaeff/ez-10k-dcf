@@ -13,13 +13,17 @@ import {
   MessageScrollerViewport,
 } from "@/components/ui/message-scroller"
 import { ModeToggle } from "@/components/mode-toggle"
+import { ValuationCard } from "@/components/ValuationCard"
 import { sendChat, type ChatMessage } from "@/lib/chat"
+
+const TICKERS = ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA", "KO", "PWR"]
 
 const initialMessages: ChatMessage[] = [
   {
     id: "assistant-1",
     role: "assistant",
-    content: "Ask me about a company's 10-K and I'll pull the financials and build a DCF.",
+    content:
+      "Ask me to value a company from its latest 10-K. Try “value KO”, “value AAPL”, or “value PWR”.",
   },
 ]
 
@@ -33,35 +37,49 @@ export default function App() {
     const text = draft.trim()
     if (!text || isSending) return
 
-const next: ChatMessage[] = [
-  ...messages,
-  { id: crypto.randomUUID(), role: "user", content: text },
-]
-setMessages(next)
-setDraft("")
-setIsSending(true)
+    const next: ChatMessage[] = [
+      ...messages,
+      { id: crypto.randomUUID(), role: "user", content: text },
+    ]
+    setMessages(next)
+    setDraft("")
+    setIsSending(true)
 
-try {
-  const reply = await sendChat(next)
-  setMessages((current) => [
-    ...current,
-    { id: crypto.randomUUID(), role: "assistant", content: reply },
-  ])
-} catch (error) {
-  const message = error instanceof Error ? error.message : String(error)
-  setMessages((current) => [
-    ...current,
-    { id: crypto.randomUUID(), role: "assistant", content: `Request failed: ${message}` },
-  ])
-} finally {
-  setIsSending(false)
-}
-}
+    try {
+      const { reply, valuation } = await sendChat(next)
+      setMessages((current) => [
+        ...current,
+        {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content: reply,
+          valuation,
+        },
+      ])
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      setMessages((current) => [
+        ...current,
+        {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content: `Request failed: ${message}`,
+        },
+      ])
+    } finally {
+      setIsSending(false)
+    }
+  }
 
   return (
     <main className="flex h-svh flex-col bg-background text-foreground">
       <header className="flex items-center justify-between border-b px-6 py-4">
-        <h1 className="text-lg font-semibold">EZ-10k: Agentic DCF</h1>
+        <div>
+          <h1 className="text-lg font-semibold">EZ-10k: Agentic DCF</h1>
+          <p className="text-xs text-muted-foreground">
+            SEC 10-K financials → FCFF → DCF valuation
+          </p>
+        </div>
         <ModeToggle />
       </header>
 
@@ -87,6 +105,9 @@ try {
                           >
                             <BubbleContent>{message.content}</BubbleContent>
                           </Bubble>
+                          {message.valuation ? (
+                            <ValuationCard valuation={message.valuation} />
+                          ) : null}
                         </MessageContent>
                       </Message>
                     </MessageScrollerItem>
@@ -100,20 +121,32 @@ try {
       </div>
 
       <footer className="border-t p-4">
+        <div className="mx-auto mb-2 flex w-full max-w-3xl flex-wrap gap-1.5">
+          {TICKERS.map((ticker) => (
+            <button
+              key={ticker}
+              type="button"
+              onClick={() => setDraft(`value ${ticker}`)}
+              disabled={isSending}
+              className="rounded-full border border-border/60 px-2 py-0.5 text-[10px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+            >
+              {ticker}
+            </button>
+          ))}
+        </div>
         <form onSubmit={send} className="mx-auto flex w-full max-w-3xl gap-2">
           <Input
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
-            placeholder="Ask about a 10-K..."
+            placeholder="value KO"
             aria-label="Message"
             disabled={isSending}
           />
           <Button type="submit" disabled={isSending || !draft.trim()}>
-            Send
+            {isSending ? "Valuing…" : "Send"}
           </Button>
         </form>
       </footer>
     </main>
   )
 }
-
