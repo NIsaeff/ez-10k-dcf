@@ -1,3 +1,5 @@
+import { ArrowUpRight01Icon } from "@hugeicons/core-free-icons"
+import { HugeiconsIcon } from "@hugeicons/react"
 import { createFileRoute } from "@tanstack/react-router"
 import { useState, type FormEvent } from "react"
 
@@ -17,8 +19,8 @@ import {
   MessageScrollerViewport,
 } from "@/components/ui/message-scroller"
 import { SidebarTrigger } from "@/components/ui/sidebar"
-import { ValuationCard } from "@/components/ValuationCard"
 import { sendChat, type ChatMessage } from "@/lib/chat"
+import { perShare } from "@/lib/format"
 import { SUPPORTED_TICKERS } from "@/lib/tickers"
 
 export const Route = createFileRoute("/")({
@@ -125,7 +127,28 @@ function ChatPage() {
                           </BubbleContent>
                           </Bubble>
                           {message.valuation ? (
-                            <ValuationCard valuation={message.valuation} />
+                            <a
+                              href={`/wizard?ticker=${encodeURIComponent(message.valuation.ticker)}`}
+                              className="mt-2 inline-flex items-center gap-2 rounded-lg border border-border/60 bg-card px-3 py-2 text-xs shadow-sm transition-colors hover:bg-muted"
+                            >
+                              <span className="font-semibold">
+                                {message.valuation.ticker}
+                              </span>
+                              <span className="tabular-nums text-muted-foreground">
+                                {perShare(
+                                  message.valuation.valuation.value_per_share,
+                                )}{" "}
+                                / share
+                              </span>
+                              <span className="flex items-center gap-1 font-medium">
+                                Open in DCF Wizard
+                                <HugeiconsIcon
+                                  icon={ArrowUpRight01Icon}
+                                  strokeWidth={2}
+                                  className="size-3"
+                                />
+                              </span>
+                            </a>
                           ) : null}
                           <ChatSources sources={message.sources} />
                         </MessageContent>

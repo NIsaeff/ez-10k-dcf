@@ -28,12 +28,27 @@ FRED_SYSTEM_PROMPT = (
 MAX_TOOL_ROUNDS = 4
 
 NARRATION_SYSTEM_PROMPT = (
-    "You are a financial analyst writing a short summary of a completed DCF. "
-    "Use ONLY the values in the JSON. Never calculate, change, or invent a number. "
-    "Use the strings in `display` verbatim for every number; never print a raw "
-    "decimal. Write at most 3 sentences: company/ticker, value per share, enterprise "
-    "value, WACC, terminal growth, the fiscal year of the filing, and one caveat from "
-    "flags. End with the disclaimer text. "
+    "You are a financial analyst answering a valuation question in chat. "
+    "Use ONLY the values in the JSON. Never calculate, change, or invent a number; "
+    "quote every figure using the strings in `display` and `assumptions`. "
+    "Reply in plain prose, 2-4 short paragraphs, and cover:\n"
+    "1. The result: value per share, enterprise value, equity value.\n"
+    "2. How it was derived, in words: free cash flow to the firm is after-tax EBIT "
+    "plus D&A minus CapEx minus the change in net working capital; it is projected "
+    "over the stated horizon along the stated growth path, discounted at the WACC "
+    "shown, with a Gordon-growth terminal value; equity value is enterprise value "
+    "minus net debt, and per-share value divides equity by diluted shares.\n"
+    "3. The assumptions that drive it and where each came from: growth (and whether "
+    "it is the historical FCFF CAGR or an override), sequential/constant path, "
+    "terminal growth, WACC and its source, the normalized FCFF base and why years "
+    "are excluded, tax rate, share count.\n"
+    "4. Sources, named explicitly: the latest 10-K from SEC EDGAR (form, fiscal "
+    "year, filed date, accession), the SEC XBRL companyfacts feed behind the "
+    "figures, and Yahoo Finance for market inputs (price, beta, risk-free) when "
+    "used. Say the cost of debt comes from the filing's interest expense.\n"
+    "5. One caveat from `flags`, then the disclaimer text.\n"
+    "Do not output tables, cards, or dashboards; the interface links to the DCF "
+    "Wizard for the full breakdown."
 )
 
 
@@ -52,6 +67,7 @@ def _compact(value: float) -> str:
 def _display(result: ValuationResult) -> dict[str, object]:
     summary = result.valuation
     assumptions = result.assumptions
+    filing = result.filing
     return {
         "company_name": result.company_name,
         "ticker": result.ticker,
@@ -62,6 +78,36 @@ def _display(result: ValuationResult) -> dict[str, object]:
         "net_debt": _compact(summary.net_debt),
         "wacc": f"{assumptions.wacc:.1%}",
         "terminal_growth": f"{assumptions.terminal_growth_rate:.1%}",
+        "method": {
+            "fcff": "EBIT x (1 - tax) + D&A - CapEx - change in net working capital",
+            "projection": (
+                f"{assumptions.projection_years}-year projection, "
+                f"{assumptions.growth_model} growth from "
+                f"{assumptions.growth_rate:.1%} to "
+                f"{assumptions.terminal_growth_rate:.1%}"
+            ),
+            "discounting": f"discounted at {assumptions.wacc:.1%} ({assumptions.wacc_source})",
+            "terminal_value": "Gordon growth on the final year's FCFF",
+            "bridge": "enterprise value minus net debt = equity; equity / diluted shares = per share",
+        },
+        "assumptions": {
+            "growth": f"{assumptions.growth_rate:.1%} ({assumptions.growth_source})",
+            "growth_model": assumptions.growth_model,
+            "terminal_growth": f"{assumptions.terminal_growth_rate:.1%}",
+            "wacc": f"{assumptions.wacc:.1%} ({assumptions.wacc_source})",
+            "fcff_base": f"{_compact(assumptions.fcff_base)} ({assumptions.fcff_base_source})",
+            "tax_rate": f"{assumptions.tax_rate:.1%} ({assumptions.tax_rate_source})",
+            "share_count": assumptions.share_count_source,
+            "net_debt": assumptions.net_debt_treatment,
+        },
+        "filing": {
+            "form": filing.form,
+            "fiscal_year_end": filing.fiscal_year_end,
+            "filed": filing.filed,
+            "accession": filing.accession_number,
+            "url": filing.url,
+        },
+        "sources": result.sources,
         "flags": result.flags,
         "disclaimer": result.disclaimer,
     }
@@ -207,15 +253,29 @@ def _tool_turn(call: Any) -> tuple[dict[str, Any], dict[str, Any]]:
 
 def _fallback_narration(result: ValuationResult) -> str:
     valuation = result.valuation
+    assumptions = result.assumptions
+    filing = result.filing
     flags = ", ".join(result.flags) if result.flags else "none"
     return (
         f"{result.company_name} ({result.ticker}) is worth about "
-        f"${valuation.value_per_share:,.2f} per share under this DCF. "
-        f"Enterprise value is ${valuation.enterprise_value / 1e9:,.1f}B, using a "
-        f"{result.assumptions.wacc:.1%} WACC and "
-        f"{result.assumptions.terminal_growth_rate:.1%} terminal growth, based on the "
-        f"FY{result.history[-1].fiscal_year} 10-K. Flags: {flags}. "
-        "Illustrative, not investment advice."
+        f"${valuation.value_per_share:,.2f} per share under this DCF, with an "
+        f"enterprise value of ${valuation.enterprise_value / 1e9:,.1f}B and equity "
+        f"value of ${valuation.equity_value / 1e9:,.1f}B.\n\n"
+        "Method: free cash flow to the firm (after-tax EBIT plus D&A minus CapEx "
+        f"minus the change in net working capital) is projected for "
+        f"{assumptions.projection_years} years with {assumptions.growth_model} growth from "
+        f"{assumptions.growth_rate:.1%} to {assumptions.terminal_growth_rate:.1%}, "
+        f"discounted at a {assumptions.wacc:.1%} WACC with a Gordon-growth terminal "
+        "value; net debt is subtracted from enterprise value and the result is "
+        "divided by diluted shares.\n\n"
+        f"Inputs: normalized FCFF base {_compact(assumptions.fcff_base)} "
+        f"({assumptions.fcff_base_source}), tax {assumptions.tax_rate:.1%} "
+        f"({assumptions.tax_rate_source}), shares from "
+        f"{assumptions.share_count_source}. Sources: the latest {filing.form} "
+        f"(FY ending {filing.fiscal_year_end}, filed {filing.filed}, accession "
+        f"{filing.accession_number}) from SEC EDGAR, figures from SEC XBRL "
+        "companyfacts. Flags: "
+        f"{flags}. {result.disclaimer}"
     )
 
 
