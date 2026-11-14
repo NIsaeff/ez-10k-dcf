@@ -1,7 +1,13 @@
+import { useState } from "react"
+
 import { BreakdownChain } from "@/components/valuation/BreakdownChain"
 import { MetricGrid } from "@/components/valuation/MetricGrid"
-import { GrowthEvidence } from "@/components/wizard/GrowthEvidence"
+import {
+  GrowthEvidenceContent,
+  StanceChip,
+} from "@/components/wizard/GrowthEvidence"
 import { SensitivityGrid } from "@/components/wizard/SensitivityGrid"
+import { Modal } from "@/components/ui/modal"
 import { Slider } from "@/components/ui/slider"
 import { Input } from "@/components/ui/input"
 import type { AssumptionReview, SensitivityGrid as Grid } from "@/lib/api"
@@ -64,6 +70,7 @@ export function DcfPanel({
   pending: boolean
   growthReview: AssumptionReview | null
 }) {
+  const [evidenceOpen, setEvidenceOpen] = useState(false)
   const summary = valuation.valuation
   const assumptions = valuation.assumptions
   const pvFcff = valuation.projection.reduce(
@@ -176,11 +183,20 @@ export function DcfPanel({
             </div>
           </Control>
 
-          <Control
-            label="Growth (year 1)"
-            value={pct((search.growth ?? assumptions.growth_rate * 100) / 100)}
-          >
-            <div className="flex items-center gap-2">
+          <div className="rounded-lg border border-border/60 bg-muted/20 p-2.5">
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-xs text-muted-foreground">
+                Growth (year 1)
+              </span>
+              <span className="flex items-center gap-1.5">
+                {growthReview ? <StanceChip review={growthReview} /> : null}
+                <span className="text-xs font-medium tabular-nums">
+                  {pct((search.growth ?? assumptions.growth_rate * 100) / 100)}
+                </span>
+              </span>
+            </div>
+
+            <div className="mt-2 flex items-center gap-2">
               <div className="min-w-0 flex-1">
                 <Slider
                   min={0}
@@ -200,7 +216,17 @@ export function DcfPanel({
                 disabled={search.growth === undefined}
               />
             </div>
-          </Control>
+
+            {growthReview ? (
+              <button
+                type="button"
+                onClick={() => setEvidenceOpen(true)}
+                className="mt-1.5 inline-flex items-center gap-1 text-[10px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
+              >
+                What the filing says · {growthReview.evidence.length} claims
+              </button>
+            ) : null}
+          </div>
 
           <Control
             label="Tax rate"
@@ -291,13 +317,6 @@ export function DcfPanel({
           </Control>
         </div>
 
-        {growthReview ? (
-          <GrowthEvidence
-            review={growthReview}
-            ticker={valuation.ticker}
-            onApply={(percent) => onChange({ growth: percent })}
-          />
-        ) : null}
       </section>
 
       <section className="rounded-xl border bg-card p-4 text-card-foreground shadow-sm">
@@ -373,6 +392,24 @@ export function DcfPanel({
           )}
         </div>
       </section>
+
+      {growthReview ? (
+        <Modal
+          open={evidenceOpen}
+          onClose={() => setEvidenceOpen(false)}
+          title="What the filing says about growth"
+          subtitle={`${valuation.ticker} · engine ${pct(assumptions.growth_rate)} · ${assumptions.growth_source.replaceAll("_", " ")}`}
+        >
+          <GrowthEvidenceContent
+            review={growthReview}
+            ticker={valuation.ticker}
+            onApply={(percent) => {
+              onChange({ growth: percent })
+              setEvidenceOpen(false)
+            }}
+          />
+        </Modal>
+      ) : null}
     </div>
   )
 }
