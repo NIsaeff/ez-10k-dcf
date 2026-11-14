@@ -4,6 +4,7 @@ import {
   createContext,
   useContext,
   useEffect,
+  useRef,
   useState,
   type ReactNode,
 } from "react"
@@ -12,10 +13,15 @@ import { ChatView } from "@/components/chat/ChatView"
 import { sendChat, type ChatMessage } from "@/lib/chat"
 
 const STORAGE_KEY = "ez10k-chat-open"
+const WIDTH_KEY = "ez10k-chat-width"
+const MIN_WIDTH = 280
+const MAX_WIDTH = 680
 
 type ChatPanelState = {
   open: boolean
   setOpen: (open: boolean) => void
+  width: number
+  setWidth: (width: number) => void
   messages: ChatMessage[]
   isSending: boolean
   send: (text: string) => Promise<void>
@@ -37,12 +43,21 @@ export function ChatPanelProvider({ children }: { children: ReactNode }) {
     if (typeof localStorage === "undefined") return true
     return localStorage.getItem(STORAGE_KEY) !== "false"
   })
+  const [width, setWidth] = useState<number>(() => {
+    if (typeof localStorage === "undefined") return 380
+    const stored = Number(localStorage.getItem(WIDTH_KEY))
+    return Number.isFinite(stored) && stored >= MIN_WIDTH ? stored : 380
+  })
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages)
   const [isSending, setIsSending] = useState(false)
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, String(open))
   }, [open])
+
+  useEffect(() => {
+    localStorage.setItem(WIDTH_KEY, String(width))
+  }, [width])
 
   const send = async (text: string) => {
     const trimmed = text.trim()
@@ -85,7 +100,7 @@ export function ChatPanelProvider({ children }: { children: ReactNode }) {
 
   return (
     <ChatPanelContext.Provider
-      value={{ open, setOpen, messages, isSending, send }}
+      value={{ open, setOpen, width, setWidth, messages, isSending, send }}
     >
       {children}
     </ChatPanelContext.Provider>
@@ -122,44 +137,116 @@ export function ChatToggle() {
 }
 
 export function ChatPanel() {
-  const { open, setOpen } = useChatPanel()
+  const { open, setOpen, width, setWidth } = useChatPanel()
+  const [dragging, setDragging] = useState(false)
+  const drag = useRef<{ startX: number; startWidth: number; moved: boolean } | null>(
+    null,
+  )
+
+  const clampWidth = (value: number) =>
+    Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, Math.min(value, window.innerWidth * 0.45)))
+
+  const onPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    event.currentTarget.setPointerCapture(event.pointerId)
+    setDragging(true)
+    drag.current = {
+      startX: event.clientX,
+      startWidth: open ? width : 0,
+      moved: false,
+    }
+  }
+
+  const onPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    const state = drag.current
+    if (!state) return
+    const delta = state.startX - event.clientX
+    if (Math.abs(delta) > 3) state.moved = true
+    if (!state.moved) return
+    setWidth(clampWidth(state.startWidth + delta))
+    if (!open) setOpen(true)
+  }
+
+  const endDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    const state = drag.current
+    drag.current = null
+    setDragging(false)
+    if (!state) return
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+    // A click without movement behaves like the sidebar rail: toggle.
+    if (!state.moved) setOpen(!open)
+  }
+
+  const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault()
+      setOpen(!open)
+    } else if (event.key === "ArrowLeft") {
+      event.preventDefault()
+      setWidth(clampWidth(width + 24))
+    } else if (event.key === "ArrowRight") {
+      event.preventDefault()
+      setWidth(clampWidth(width - 24))
+    }
+  }
 
   return (
-    <div
-      data-slot="chat-panel"
-      data-state={open ? "open" : "closed"}
-      aria-hidden={!open}
-      inert={!open}
-      className={`shrink-0 overflow-hidden transition-[width] duration-200 ease-linear ${
-        open ? "w-[380px] max-w-[45vw]" : "w-0"
-      }`}
-    >
-      <aside
-        aria-label="AI chat panel"
-        className={`flex h-full w-[380px] max-w-[45vw] flex-col border-l bg-background transition-transform duration-200 ease-linear ${
-          open ? "translate-x-0" : "translate-x-full"
+    <div className="relative flex shrink-0">
+      <div
+        role="separator"
+        aria-orientation="vertical"
+        aria-label={open ? "Resize or collapse AI chat" : "Open AI chat"}
+        aria-valuenow={open ? Math.round(width) : 0}
+        aria-valuemin={MIN_WIDTH}
+        aria-valuemax={MAX_WIDTH}
+        tabIndex={0}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+        onKeyDown={onKeyDown}
+        className="absolute inset-y-0 -left-2 z-20 w-4 cursor-col-resize touch-none after:absolute after:inset-y-0 after:left-1/2 after:w-[2px] after:-translate-x-1/2 after:bg-transparent hover:after:bg-border focus-visible:after:bg-primary focus-visible:outline-none"
+      />
+
+      <div
+        data-slot="chat-panel"
+        data-state={open ? "open" : "closed"}
+        aria-hidden={!open}
+        inert={!open}
+        style={{ width: open ? width : 0 }}
+        className={`shrink-0 overflow-hidden ${
+          dragging ? "transition-none" : "transition-[width] duration-200 ease-linear"
         }`}
       >
-      <div className="flex shrink-0 items-center justify-between gap-2 border-b px-3 py-2">
-        <div className="flex items-center gap-2">
-          <HugeiconsIcon
-            icon={AiChat01Icon}
-            strokeWidth={2}
-            className="size-4 text-muted-foreground"
-          />
-          <span className="text-sm font-semibold">AI Chat</span>
-        </div>
-        <button
-          type="button"
-          onClick={() => setOpen(false)}
-          aria-label="Close AI chat"
-          className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        <aside
+          aria-label="AI chat panel"
+          style={{ width }}
+          className={`flex h-full flex-col border-l bg-background ${
+            dragging ? "" : "transition-transform duration-200 ease-linear"
+          } ${open ? "translate-x-0" : "translate-x-full"}`}
         >
-          <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} className="size-4" />
-        </button>
+          <div className="flex shrink-0 items-center justify-between gap-2 border-b px-3 py-2">
+            <div className="flex items-center gap-2">
+              <HugeiconsIcon
+                icon={AiChat01Icon}
+                strokeWidth={2}
+                className="size-4 text-muted-foreground"
+              />
+              <span className="text-sm font-semibold">AI Chat</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              aria-label="Close AI chat"
+              className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} className="size-4" />
+            </button>
+          </div>
+          <ChatView compact />
+        </aside>
       </div>
-        <ChatView compact />
-      </aside>
     </div>
   )
 }
