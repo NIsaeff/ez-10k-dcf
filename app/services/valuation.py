@@ -14,7 +14,7 @@ from app.schemas import (
     SourceFact,
     ValuationResult,
 )
-from app.services import dcf, financials
+from app.services import dcf, financials, macro
 
 SUPPORTED_TICKERS = [
     "AAPL",
@@ -245,5 +245,6 @@ def analyze_from_company(
         flags=flags,
         sources=company.sources,
         source_facts=[SourceFact(**row) for row in company.source_facts],
+        macro=macro.snapshot(),
         disclaimer=DISCLAIMER,
     )

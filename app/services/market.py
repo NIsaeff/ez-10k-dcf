@@ -29,6 +29,7 @@ from urllib.parse import quote
 import httpx
 
 from app.config import settings
+from app.services import macro
 
 CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
 QUOTE_SUMMARY_URL = "https://query1.finance.yahoo.com/v10/finance/quoteSummary/{ticker}"
@@ -74,6 +75,7 @@ class MarketInputs:
     beta_observations: int = 0
     beta_r_squared: float | None = None
     risk_free_rate: float | None = None
+    risk_free_source: str | None = None
     as_of: str | None = None
     available: bool = False
     flags: list[str] = field(default_factory=list)
@@ -315,6 +317,7 @@ def computed_beta(ticker: str) -> tuple[float | None, int, float | None]:
 
 
 def risk_free_rate() -> float | None:
+    """Yahoo ``^TNX`` 10-year close. Kept as the fallback source."""
     try:
         payload, _ = chart(RISK_FREE_SYMBOL, range_="5d", interval="1d")
     except Exception:  # noqa: BLE001 - risk-free is optional
@@ -323,6 +326,26 @@ def risk_free_rate() -> float | None:
     if price is None:
         return None
     return price / TREASURY_YIELD_DIVISOR
+
+
+def risk_free_with_source() -> tuple[float | None, str | None]:
+    """FRED ``DGS10`` first (deterministic, auditable), Yahoo as the fallback.
+
+    A fresh FRED observation wins; a stale one only beats having nothing.
+    """
+    fred = macro.risk_free()
+    if fred is not None and fred.value is not None and not fred.stale:
+        return fred.value / TREASURY_YIELD_DIVISOR, f"fred: {fred.series} {fred.observation_date}"
+
+    yahoo = risk_free_rate()
+    if yahoo is not None:
+        return yahoo, "yahoo: ^TNX 10y close"
+
+    if fred is not None and fred.value is not None:
+        source = f"fred: {fred.series} {fred.observation_date} (stale)"
+        return fred.value / TREASURY_YIELD_DIVISOR, source
+
+    return None, None
 
 
 def market_inputs(ticker: str) -> MarketInputs:
@@ -369,11 +392,14 @@ def market_inputs(ticker: str) -> MarketInputs:
         except Exception:  # noqa: BLE001, S110 - price is optional
             pass
 
-    risk_free = risk_free_rate()
+    risk_free, risk_free_source = risk_free_with_source()
+    result.risk_free_source = risk_free_source
     if risk_free is None:
         result.flags.append("risk_free_unavailable")
     else:
         result.risk_free_rate = risk_free
+        if risk_free_source is not None and risk_free_source.startswith("yahoo"):
+            result.flags.append("risk_free_fallback_yahoo")
 
     if result.price is None:
         result.flags.append("price_unavailable")

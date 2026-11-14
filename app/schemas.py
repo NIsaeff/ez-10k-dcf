@@ -155,6 +155,34 @@ class ValuationSummary(BaseModel):
     value_per_share: float
 
 
+class MacroInput(BaseModel):
+    """One macro series value, with enough provenance to audit it."""
+
+    role: str
+    series: str
+    label: str = ""
+    value: float | None = None
+    units: str = ""
+    observation_date: str = ""
+    fetched_at: str = ""
+    source: str = "fred"
+    url: str = ""
+    stale: bool = False
+
+
+class MacroSnapshot(BaseModel):
+    """The macro context a valuation was priced in.
+
+    ``status`` is never absent by accident: ``absent`` means FRED had nothing
+    usable and the result says so instead of implying a rate environment.
+    """
+
+    status: Literal["complete", "degraded", "absent"] = "absent"
+    as_of: str = ""
+    inputs: list[MacroInput] = Field(default_factory=list)
+    flags: list[str] = Field(default_factory=list)
+
+
 class ValuationResult(BaseModel):
     ticker: str
     company_name: str
@@ -169,6 +197,7 @@ class ValuationResult(BaseModel):
     flags: list[str]
     sources: list[str]
     source_facts: list[SourceFact] = Field(default_factory=list)
+    macro: MacroSnapshot = Field(default_factory=MacroSnapshot)
     disclaimer: str
 
 
@@ -254,9 +283,33 @@ class TickerSearchResponse(BaseModel):
     total: int
 
 
+class TraceStep(BaseModel):
+    """One MCP tool call, kept for the chat's trace UI."""
+
+    tool: str
+    input: dict[str, Any] = Field(default_factory=dict)
+    status: Literal["ok", "error"] = "ok"
+    duration_ms: int = 0
+    output: str = ""
+
+
+class SourceRef(BaseModel):
+    """A FRED series the reply actually used."""
+
+    id: str
+    title: str = ""
+    units: str = ""
+    date: str = ""
+    url: str
+
+
 class ChatResponse(BaseModel):
     reply: str
     valuation: ValuationResult | None = None
+    tools_used: list[str] = Field(default_factory=list)
+    trace: list[TraceStep] = Field(default_factory=list)
+    sources: list[SourceRef] = Field(default_factory=list)
+
 
 
 class ErrorResponse(BaseModel):
@@ -271,6 +324,7 @@ class HealthResponse(BaseModel):
     llm_model: str
     llm_configured: bool
     supported_tickers: list[str]
+    fred_mcp: str = "disabled"
     extra: dict[str, Any] | None = None
 
 

@@ -25,5 +25,15 @@ class Settings(BaseSettings):
     sec_user_agent: str = "EZ-10k Capstone (contact@example.com)"
     data_dir: Path = ROOT_DIR / "data"
 
+    # FRED macro data. This app owns the key: it reads FRED_API_KEY here and
+    # passes it to the third-party `fred-mcp-server` child process's environment.
+    fred_api_key: str = ""
+    fred_mcp_enabled: bool = True
+    fred_mcp_package: str = "fred-mcp-server"
+    # "http" talks to a long-lived sidecar (scripts/dev-mcp.sh) so its cache and
+    # rate limiter survive between turns; "stdio" spawns per call (slow, cold).
+    fred_mcp_transport: str = "http"
+    fred_mcp_url: str = "http://127.0.0.1:3101/mcp"
+
 
 settings = Settings()

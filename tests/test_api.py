@@ -64,13 +64,57 @@ def test_chat_values_a_ticker(monkeypatch) -> None:
 
 
 def test_chat_plain_message_uses_llm(monkeypatch) -> None:
-    monkeypatch.setattr("app.main.llm.chat_reply", lambda messages: "Hello there.")
+    monkeypatch.setattr(
+        "app.main.llm.chat_reply", lambda messages: ("Hello there.", [])
+    )
     response = client.post(
         "/api/chat",
         json={"messages": [{"role": "user", "content": "hello"}]},
     )
     assert response.status_code == 200
-    assert response.json() == {"reply": "Hello there.", "valuation": None}
+    assert response.json() == {
+        "reply": "Hello there.",
+        "valuation": None,
+        "tools_used": [],
+        "trace": [],
+        "sources": [],
+    }
+
+
+def test_chat_reports_the_tool_trace_and_sources(monkeypatch) -> None:
+    trace = [
+        {
+            "tool": "fred_get_series",
+            "input": {"series_id": "DGS10"},
+            "status": "ok",
+            "duration_ms": 42,
+            "output": (
+                '{"series_id":"DGS10","title":"10-Year Treasury","units":"Percent",'
+                '"data":[{"date":"2026-11-12","value":5.1}]}'
+            ),
+        }
+    ]
+    monkeypatch.setattr(
+        "app.main.llm.chat_reply", lambda messages: ("10Y is 5.10%.", trace)
+    )
+    response = client.post(
+        "/api/chat",
+        json={"messages": [{"role": "user", "content": "10 year yield?"}]},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["tools_used"] == ["fred_get_series"]
+    assert body["trace"][0]["duration_ms"] == 42
+    assert body["trace"][0]["input"] == {"series_id": "DGS10"}
+    assert body["sources"] == [
+        {
+            "id": "DGS10",
+            "title": "10-Year Treasury",
+            "units": "Percent",
+            "date": "2026-11-12",
+            "url": "https://fred.stlouisfed.org/series/DGS10",
+        }
+    ]
 
 
 def test_chat_insufficient_data_is_friendly(monkeypatch) -> None:

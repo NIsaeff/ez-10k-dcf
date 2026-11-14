@@ -2,6 +2,8 @@ import { createFileRoute } from "@tanstack/react-router"
 import { useState, type FormEvent } from "react"
 
 import { ModeToggle } from "@/components/mode-toggle"
+import { ChatSources, ChatTrace } from "@/components/ChatTrace"
+import { Markdown } from "@/components/Markdown"
 import { Bubble, BubbleContent } from "@/components/ui/bubble"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -28,7 +30,7 @@ const initialMessages: ChatMessage[] = [
     id: "assistant-1",
     role: "assistant",
     content:
-      "Ask me to value a company from its latest 10-K. Try “value KO”, “value AAPL”, or “value PWR”.",
+      "Ask me to value a company from its latest 10-K — “value KO”, “value AAPL”, “value PWR” — or ask about a macro series such as the 10-year yield, CPI, or GDP.",
   },
 ]
 
@@ -51,7 +53,7 @@ function ChatPage() {
     setIsSending(true)
 
     try {
-      const { reply, valuation } = await sendChat(next)
+      const { reply, valuation, trace, sources } = await sendChat(next)
       setMessages((current) => [
         ...current,
         {
@@ -59,6 +61,8 @@ function ChatPage() {
           role: "assistant",
           content: reply,
           valuation,
+          trace,
+          sources,
         },
       ])
     } catch (error) {
@@ -107,20 +111,37 @@ function ChatPage() {
                     >
                       <Message align={isUser ? "end" : "start"}>
                         <MessageContent>
+                          <ChatTrace trace={message.trace} />
                           <Bubble
                             align={isUser ? "end" : "start"}
                             variant={isUser ? "default" : "muted"}
                           >
-                            <BubbleContent>{message.content}</BubbleContent>
+                            <BubbleContent>
+                            {isUser ? (
+                              message.content
+                            ) : (
+                              <Markdown text={message.content} />
+                            )}
+                          </BubbleContent>
                           </Bubble>
                           {message.valuation ? (
                             <ValuationCard valuation={message.valuation} />
                           ) : null}
+                          <ChatSources sources={message.sources} />
                         </MessageContent>
                       </Message>
                     </MessageScrollerItem>
                   )
                 })}
+                {isSending ? (
+                  <MessageScrollerItem messageId="pending-thinking">
+                    <Message align="start">
+                      <MessageContent>
+                        <ChatTrace running />
+                      </MessageContent>
+                    </Message>
+                  </MessageScrollerItem>
+                ) : null}
               </MessageScrollerContent>
             </MessageScrollerViewport>
             <MessageScrollerButton />
@@ -146,12 +167,12 @@ function ChatPage() {
           <Input
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
-            placeholder="value KO"
+            placeholder="value KO — or ask about the 10Y yield"
             aria-label="Message"
             disabled={isSending}
           />
           <Button type="submit" disabled={isSending || !draft.trim()}>
-            {isSending ? "Valuing…" : "Send"}
+            {isSending ? "Thinking…" : "Send"}
           </Button>
         </form>
       </footer>

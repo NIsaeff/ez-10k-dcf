@@ -36,6 +36,7 @@ from app.services import (
     dcf,
     edgar,
     financials,
+    fred_mcp,
     market,
     valuation,
     wacc,
@@ -77,6 +78,7 @@ def health() -> HealthResponse:
         llm_model=settings.llm_model,
         llm_configured=bool(settings.openai_api_key),
         supported_tickers=SUPPORTED_TICKERS,
+        fred_mcp=fred_mcp.health(),
     )
 
 
@@ -459,7 +461,7 @@ def chat(payload: ChatRequest) -> ChatResponse:
         return ChatResponse(reply=llm.narrate_valuation(result), valuation=result)
 
     try:
-        reply = llm.chat_reply(
+        reply, trace = llm.chat_reply(
             [message.model_dump() for message in payload.messages]
         )
     except Exception:  # noqa: BLE001 - chat fallback
@@ -467,7 +469,13 @@ def chat(payload: ChatRequest) -> ChatResponse:
             "I can value a supported ticker from its latest 10-K. "
             f"Try: 'value KO'. Supported: {', '.join(SUPPORTED_TICKERS)}."
         )
-    return ChatResponse(reply=reply)
+        trace = []
+    return ChatResponse(
+        reply=reply,
+        tools_used=[step["tool"] for step in trace],
+        trace=trace,
+        sources=fred_mcp.series_sources(trace),
+    )
 
 
 if settings.frontend_dist.is_dir():
