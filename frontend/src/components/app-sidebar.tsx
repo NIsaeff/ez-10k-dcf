@@ -1,8 +1,4 @@
-import {
-  AiChat01Icon,
-  BookOpen01Icon,
-  Calculator01Icon,
-} from "@hugeicons/core-free-icons"
+import { BookOpen01Icon, Calculator01Icon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 import { Link, useMatchRoute } from "@tanstack/react-router"
 
@@ -18,12 +14,7 @@ import {
   SidebarMenuItem,
   SidebarRail,
 } from "@/components/ui/sidebar"
-
-const navItems = [
-  { title: "AI Chat", to: "/", icon: AiChat01Icon, exact: true },
-  { title: "DCF Wizard", to: "/wizard", icon: Calculator01Icon, exact: false },
-  { title: "10-K Analysis", to: "/filing", icon: BookOpen01Icon, exact: false },
-] as const
+import { defaultWizardSearch } from "@/lib/wizard-state"
 
 export function AppSidebar() {
   const matchRoute = useMatchRoute()
@@ -41,18 +32,33 @@ export function AppSidebar() {
           <SidebarGroupLabel>Workspace</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {navItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton
-                    isActive={matchRoute({ to: item.to, fuzzy: !item.exact }) !== false}
-                    tooltip={item.title}
-                    render={<Link to={item.to} />}
-                  >
-                    <HugeiconsIcon icon={item.icon} strokeWidth={2} />
-                    <span>{item.title}</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  isActive={matchRoute({ to: "/wizard" }) !== false}
+                  tooltip="DCF Wizard"
+                  render={
+                    <Link to="/wizard" search={defaultWizardSearch()} />
+                  }
+                >
+                  <HugeiconsIcon icon={Calculator01Icon} strokeWidth={2} />
+                  <span>DCF Wizard</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  isActive={matchRoute({ to: "/filing" }) !== false}
+                  tooltip="10-K Analysis"
+                  render={
+                    <Link
+                      to="/filing"
+                      search={{ ticker: "KO", claim: undefined }}
+                    />
+                  }
+                >
+                  <HugeiconsIcon icon={BookOpen01Icon} strokeWidth={2} />
+                  <span>10-K Analysis</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

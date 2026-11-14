@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router"
 import { useEffect, useMemo, useState } from "react"
 
+import { ChatToggle } from "@/components/chat/ChatPanel"
 import { ModeToggle } from "@/components/mode-toggle"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -137,7 +138,10 @@ function WizardPage() {
             </p>
           </div>
         </div>
-        <ModeToggle />
+        <div className="flex items-center gap-2">
+          <ChatToggle />
+          <ModeToggle />
+        </div>
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-4">

@@ -95,6 +95,11 @@ export function validateWizardSearch(
   }
 }
 
+/** Full default search for programmatic navigation to /wizard. */
+export function defaultWizardSearch(ticker: string = DEFAULT_SEARCH.ticker): WizardSearch {
+  return { ...DEFAULT_SEARCH, ticker }
+}
+
 /** Percent form -> decimal rate for the API. */
 export function toRate(percent: number): number {
   return Math.round((percent / 100) * 1e6) / 1e6

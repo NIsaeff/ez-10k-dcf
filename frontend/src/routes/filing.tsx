@@ -5,6 +5,7 @@ import { useEffect, useState } from "react"
 
 import { ClaimTree } from "@/components/filing/ClaimTree"
 import { FilingFrame } from "@/components/filing/FilingFrame"
+import { ChatToggle } from "@/components/chat/ChatPanel"
 import { ModeToggle } from "@/components/mode-toggle"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { TickerSearch } from "@/components/wizard/TickerSearch"
@@ -159,6 +160,7 @@ function FilingPage() {
               })
             }
           />
+          <ChatToggle />
           <ModeToggle />
         </div>
       </header>
