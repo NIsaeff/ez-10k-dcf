@@ -122,6 +122,37 @@ def _valuation_or_error(
         )
 
 
+FILING_VIEW_CSP = (
+    "default-src 'none'; "
+    "style-src 'unsafe-inline'; "
+    "img-src https://www.sec.gov data:; "
+    "font-src https://www.sec.gov data:; "
+    "script-src 'unsafe-inline'; "
+    "base-uri https://www.sec.gov; "
+    "form-action 'none'"
+)
+
+
+@app.get("/api/filing/{ticker}/document", include_in_schema=False)
+def filing_document(ticker: str):
+    """Serve the filing as a sanitised, same-origin page for the viewer iframe."""
+    ticker = ticker.upper().strip()
+    try:
+        info = edgar.company_info(ticker)
+        cik = f"{int(info['cik']):010d}"
+        meta = edgar.latest_10k(int(info["cik"]))
+        html = filing_service.fetch_document(cik, meta["accession_number"], meta["document"])
+    except (KeyError, ValueError) as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"{type(exc).__name__}: {exc}") from exc
+
+    return HTMLResponse(
+        filing_service.render_for_web(html, meta["url"]),
+        headers={"Content-Security-Policy": FILING_VIEW_CSP},
+    )
+
+
 @app.get("/api/filing/{ticker}", response_model=FilingAnalysis)
 def filing_analysis(ticker: str):
     """Parse the latest 10-K into blocks plus a hierarchy of cited claims."""
@@ -177,6 +208,7 @@ def filing_analysis(ticker: str):
         company_name=str(info["title"]),
         accession=meta["accession_number"],
         document_url=meta["url"],
+        document_view_url=f"/api/filing/{ticker}/document",
         filed=meta["filed"],
         fiscal_year_end=meta["fiscal_year_end"],
         sections=[FilingSection(**section) for section in parsed.sections],

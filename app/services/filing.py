@@ -237,6 +237,231 @@ def locate(quote: str, blocks: list[Block], *, section: str | None = None) -> di
     return None
 
 
+SCRIPT_PATTERN = re.compile(r"<script\b[^>]*>.*?</script>", re.IGNORECASE | re.DOTALL)
+EVENT_ATTRIBUTE = re.compile(
+    r"""\s+on[a-z]+\s*=\s*("[^"]*"|'[^']*')""", re.IGNORECASE
+)
+
+BRIDGE = r"""
+<style>
+  mark.filing-hit {
+    background: #fcd34d;
+    color: inherit;
+    padding: 0;
+    border-radius: 2px;
+  }
+</style>
+<script>
+(function () {
+  var HIT = "filing-hit";
+  var TOC_SKIP_CHARS = 8000;
+
+  function norm(value) {
+    return String(value || "").replace(/\u00a0/g, " ").replace(/\s+/g, " ");
+  }
+
+  function textNodes() {
+    var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
+      acceptNode: function (node) {
+        if (!node.nodeValue || !node.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
+        var element = node.parentElement;
+        if (!element) return NodeFilter.FILTER_REJECT;
+        var tag = element.tagName;
+        if (tag === "SCRIPT" || tag === "STYLE" || tag === "NOSCRIPT") return NodeFilter.FILTER_REJECT;
+        if (element.checkVisibility && !element.checkVisibility({ checkOpacity: false, checkVisibilityCSS: true })) {
+          return NodeFilter.FILTER_REJECT;
+        }
+        var style = getComputedStyle(element);
+        if (style.display === "none" || style.visibility === "hidden") return NodeFilter.FILTER_REJECT;
+        return NodeFilter.FILTER_ACCEPT;
+      }
+    });
+    var nodes = [];
+    var node;
+    while ((node = walker.nextNode())) nodes.push(node);
+    return nodes;
+  }
+
+  // Flatten visible text into a whitespace-normalised string plus a map back to
+  // raw offsets, so a quote can be found regardless of markup boundaries.
+  function flatten() {
+    var nodes = textNodes();
+    var raw = "";
+    var spans = [];
+    for (var i = 0; i < nodes.length; i += 1) {
+      var value = nodes[i].nodeValue;
+      spans.push({ node: nodes[i], start: raw.length, end: raw.length + value.length });
+      raw += value;
+    }
+
+    var chars = [];
+    var map = [];
+    var lastSpace = true;
+    for (var j = 0; j < raw.length; j += 1) {
+      var ch = raw[j] === "\u00a0" ? " " : raw[j];
+      if (/\s/.test(ch)) {
+        if (lastSpace) continue;
+        lastSpace = true;
+        chars.push(" ");
+        map.push(j);
+      } else {
+        lastSpace = false;
+        chars.push(ch);
+        map.push(j);
+      }
+    }
+    return { text: chars.join(""), map: map, spans: spans };
+  }
+
+  function clear() {
+    var marks = document.querySelectorAll("mark." + HIT);
+    for (var i = 0; i < marks.length; i += 1) {
+      var mark = marks[i];
+      var parent = mark.parentNode;
+      if (!parent) continue;
+      parent.replaceChild(document.createTextNode(mark.textContent || ""), mark);
+      parent.normalize();
+    }
+  }
+
+  function wrapRange(spans, rawStart, rawEnd) {
+    for (var k = 0; k < spans.length; k += 1) {
+      var span = spans[k];
+      if (span.end <= rawStart || span.start >= rawEnd) continue;
+      var localStart = Math.max(0, rawStart - span.start);
+      var localEnd = Math.min(span.node.nodeValue.length, rawEnd - span.start);
+      if (localEnd <= localStart) continue;
+      var target = span.node.splitText(localStart);
+      target.splitText(localEnd - localStart);
+      var mark = document.createElement("mark");
+      mark.className = HIT;
+      target.parentNode.replaceChild(mark, target);
+      mark.appendChild(target);
+    }
+  }
+
+  function highlight(rawQuote, sectionLabel) {
+    clear();
+    var needle = norm(rawQuote).trim();
+    if (needle.length < 8) return false;
+
+    var flat = flatten();
+    var from = 0;
+    if (sectionLabel) {
+      var haystack = flat.text.toUpperCase();
+      var heading = "ITEM " + String(sectionLabel).replace(/^item\s*/i, "").toUpperCase();
+      var headingAt = haystack.indexOf(heading);
+      while (headingAt >= 0 && flat.map[headingAt] <= TOC_SKIP_CHARS) {
+        headingAt = haystack.indexOf(heading, headingAt + 1);
+      }
+      if (headingAt < 0) headingAt = haystack.indexOf(heading);
+      if (headingAt >= 0) from = headingAt;
+    }
+
+    var found = flat.text.indexOf(needle, from);
+    if (found < 0) found = flat.text.indexOf(needle);
+    if (found < 0) return false;
+
+    var rawStart = flat.map[found];
+    var rawEnd = flat.map[found + needle.length - 1] + 1;
+    wrapRange(flat.spans, rawStart, rawEnd);
+
+    var first = document.querySelector("mark." + HIT);
+    if (first) first.scrollIntoView({ block: "center" });
+    return true;
+  }
+
+  function scrollToSection(label) {
+    var wanted = norm(label).trim().toUpperCase();
+    if (!wanted) return false;
+
+    var flat = flatten();
+    var haystack = flat.text.toUpperCase();
+    var index = haystack.indexOf(wanted);
+    var chosen = -1;
+    while (index >= 0) {
+      // Skip the table of contents near the top of the document.
+      if (flat.map[index] > TOC_SKIP_CHARS) {
+        chosen = index;
+        break;
+      }
+      index = haystack.indexOf(wanted, index + 1);
+    }
+    if (chosen < 0) {
+      chosen = haystack.indexOf(wanted);
+      if (chosen < 0) return false;
+    }
+
+    var raw = flat.map[chosen];
+    var spans = flat.spans;
+    for (var k = 0; k < spans.length; k += 1) {
+      if (spans[k].end > raw) {
+        var element = spans[k].node.parentElement || spans[k].node;
+        element.scrollIntoView({ block: "start" });
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function announce() {
+    if (window.parent) window.parent.postMessage({ type: "ready" }, "*");
+  }
+
+  window.addEventListener("message", function (event) {
+    var data = event.data || {};
+    if (data.type === "highlight") {
+      var found = highlight(String(data.quote || ""), String(data.section || ""));
+      if (event.source) event.source.postMessage({ type: "highlighted", found: found }, "*");
+    } else if (data.type === "clear") {
+      clear();
+    } else if (data.type === "section") {
+      clear();
+      scrollToSection(String(data.label || ""));
+    } else if (data.type === "ping") {
+      announce();
+    }
+  });
+
+  if (document.readyState === "complete") announce();
+  else window.addEventListener("load", announce);
+  announce();
+})();
+</script>
+"""
+
+
+def render_for_web(html: str, document_url: str) -> str:
+    """Return a same-origin, script-stripped copy of the filing with a bridge.
+
+    The original document is XHTML with inline styles and a hidden inline-XBRL
+    header. Serving it as-is would expose us to whatever script it contains, so
+    scripts and event handlers are stripped and a single highlighter is injected.
+    """
+    cleaned = SCRIPT_PATTERN.sub("", html)
+    cleaned = EVENT_ATTRIBUTE.sub("", cleaned)
+
+    directory = document_url.rsplit("/", 1)[0] + "/"
+    if "<base " not in cleaned.lower():
+        base = f'<base href="{directory}">'
+        if re.search(r"<head[^>]*>", cleaned, re.IGNORECASE):
+            cleaned = re.sub(
+                r"(<head[^>]*>)", lambda match: match.group(1) + base, cleaned,
+                count=1, flags=re.IGNORECASE,
+            )
+        else:
+            cleaned = base + cleaned
+
+    if re.search(r"</body>", cleaned, re.IGNORECASE):
+        cleaned = re.sub(
+            r"</body>", lambda match: BRIDGE + "</body>", cleaned,
+            count=1, flags=re.IGNORECASE,
+        )
+    else:
+        cleaned = cleaned + BRIDGE
+    return cleaned
+
+
 def section_text(blocks: list[Block], section: str) -> str:
     return "\n".join(block.text for block in blocks if block.section == section)
 

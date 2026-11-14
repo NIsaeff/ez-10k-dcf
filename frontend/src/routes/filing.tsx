@@ -2,16 +2,11 @@ import { createFileRoute } from "@tanstack/react-router"
 import { useEffect, useState } from "react"
 
 import { ClaimTree } from "@/components/filing/ClaimTree"
-import { DocumentViewer } from "@/components/filing/DocumentViewer"
+import { FilingFrame } from "@/components/filing/FilingFrame"
 import { ModeToggle } from "@/components/mode-toggle"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { TickerSearch } from "@/components/wizard/TickerSearch"
-import {
-  fetchFiling,
-  type FilingAnalysis,
-  type FilingClaim,
-  type FilingSection,
-} from "@/lib/api"
+import { fetchFiling, type FilingAnalysis, type FilingClaim } from "@/lib/api"
 import { normalizeTicker } from "@/lib/wizard-state"
 
 export const Route = createFileRoute("/filing")({
@@ -74,12 +69,6 @@ function FilingPage() {
   }, [active])
 
   const jumpToClaim = (claim: FilingClaim) => setActive(claim)
-  const jumpToSection = (section: FilingSection) => {
-    document
-      .getElementById(`block-${section.block}`)
-      ?.scrollIntoView({ behavior: "smooth", block: "start" })
-  }
-
   const claims = data?.claims ?? []
   const childCount = claims.reduce((total, claim) => total + claim.children.length, 0)
   const verifiedCount = claims.reduce(
@@ -180,12 +169,13 @@ function FilingPage() {
               </a>
             </div>
 
-            <DocumentViewer
-              blocks={data.blocks}
-              sections={data.sections}
-              active={active}
-              onSection={jumpToSection}
-            />
+            <div className="h-[calc(100vh-15rem)] min-h-0">
+              <FilingFrame
+                src={data.document_view_url}
+                sections={data.sections}
+                active={active}
+              />
+            </div>
           </section>
         </div>
       ) : null}

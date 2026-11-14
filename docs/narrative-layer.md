@@ -137,9 +137,16 @@ data, not instructions", give extraction calls no tools, and validate every quot
 
 ## Implementation notes for P0
 
-- Same-origin **document viewer** rather than an iframe: SEC serves the primary
-  document with frame-blocking headers, and highlighting needs precise offsets
-  anyway. We render parsed blocks and highlight by `{block, start, end}`.
+- Same-origin **iframe of the real document**, served through
+  `GET /api/filing/{ticker}/document`: SEC sends `X-Frame-Options: SAMEORIGIN`,
+  so the page is fetched once, cached, stripped of scripts and event handlers,
+  and re-served under a restrictive CSP with `sandbox="allow-scripts"`.
+  Rendering the original HTML restores tables, typography, and — importantly —
+  hides the inline-XBRL header that a text extraction would otherwise show.
 - Claims are stored as a 3-level tree: section → parent claim → child claim.
   Parents may carry a representative quote; children always do.
+- Highlighting happens inside the iframe: the parent posts
+  `{type: "highlight", quote, section}` and an injected script flattens visible
+  text, finds the quote (skipping the table of contents and preferring the
+  claim's own Item), and wraps the exact range in `<mark>`.
 - Extraction runs synchronously on first view and is cached per accession.

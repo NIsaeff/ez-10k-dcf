@@ -62,6 +62,7 @@ export type FilingAnalysis = {
   company_name: string
   accession: string
   document_url: string
+  document_view_url: string
   filed: string
   fiscal_year_end: string
   sections: FilingSection[]

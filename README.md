@@ -70,13 +70,14 @@ React chat (Vite) ──/api/chat──▶ FastAPI
 | `GET /api/wacc/{ticker}` | CAPM/WACC decomposition with per-input sources |
 | `GET /api/tickers?q=` | Ticker search over SEC's universe, pilots ranked first |
 | `GET /api/filing/{ticker}` | Parsed 10-K blocks + a hierarchy of quoted claims |
+| `GET /api/filing/{ticker}/document` | Sanitised same-origin filing for the viewer |
 | `POST /api/chat` | `{messages}` → `{reply, valuation}`; detects allowlisted tickers |
 | `GET /api/health` | status, model, supported tickers |
 | `GET /docs` | Swagger UI |
 
 Routes: `/` is the chat, `/wizard` is the DCF Wizard (FCFF, WACC, DCF tabs; state lives
 in search params so a valuation is linkable), `/filing` is 10-K Analysis (claim tree plus
-the highlighted source document). The wizard's ticker box searches all
+the rendered filing, with verbatim quotes highlighted in place). The wizard's ticker box searches all
 ~10,400 SEC filers, with the 9 pilot tickers listed first by default; chat stays on the
 pilot allowlist.
 

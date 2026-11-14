@@ -199,6 +199,7 @@ class FilingAnalysis(BaseModel):
     company_name: str
     accession: str
     document_url: str
+    document_view_url: str
     filed: str
     fiscal_year_end: str
     sections: list[FilingSection]
