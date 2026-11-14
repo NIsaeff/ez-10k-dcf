@@ -70,3 +70,8 @@ def test_pilot_allowlist_still_guards_chat(monkeypatch) -> None:
     except valuation.UnsupportedTicker:
         return
     raise AssertionError("expected UnsupportedTicker without allow_any")
+
+
+def test_company_names_rank_above_similarly_prefixed_funds() -> None:
+    rows = edgar.search_tickers("johnson", limit=3, pilots=PILOTS)
+    assert rows[0]["ticker"] == "JNJ"

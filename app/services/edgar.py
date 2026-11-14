@@ -75,15 +75,19 @@ def search_tickers(
     """
     text = query.strip().upper()
     pilot_set = {str(ticker).upper() for ticker in pilots}
-    matches: list[tuple[tuple[int, int, str], dict[str, Any]]] = []
+    matches: list[tuple[tuple[int, int, int, str], dict[str, Any]]] = []
 
     for ticker, info in ticker_map().items():
         name = str(info["title"])
+        upper_name = name.upper()
+
         if text:
             if ticker.startswith(text):
                 match_rank = 0
-            elif text in name.upper():
+            elif upper_name.startswith(text):
                 match_rank = 1
+            elif text in upper_name:
+                match_rank = 2
             else:
                 continue
         else:
@@ -91,9 +95,17 @@ def search_tickers(
                 continue
             match_rank = 0
 
+        # Among name matches, shorter names are usually operating companies;
+        # this keeps things like "JOHNSON & JOHNSON" above similarly prefixed
+        # closed-end funds without hardcoding fund keywords.
         matches.append(
             (
-                (0 if ticker in pilot_set else 1, match_rank, ticker),
+                (
+                    0 if ticker in pilot_set else 1,
+                    match_rank,
+                    len(name) if match_rank > 0 else 0,
+                    ticker,
+                ),
                 {
                     "ticker": ticker,
                     "name": name,

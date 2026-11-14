@@ -8,11 +8,11 @@ const DEBOUNCE_MS = 150
 
 export function TickerSearch({
   ticker,
-  disabled,
+  size = "md",
   onSelect,
 }: {
   ticker: string
-  disabled?: boolean
+  size?: "md" | "lg"
   onSelect: (ticker: string) => void
 }) {
   const [open, setOpen] = useState(false)
@@ -83,13 +83,19 @@ export function TickerSearch({
     }
   }
 
+  const large = size === "lg"
+
   return (
-    <div ref={containerRef} className="relative">
-      <div className="flex items-center gap-1.5 rounded-md border border-input bg-background px-2">
+    <div ref={containerRef} className="relative w-full">
+      <div
+        className={`flex items-center gap-2.5 rounded-xl border border-input bg-background px-3 shadow-sm transition-colors focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20 ${
+          large ? "h-12" : "h-9"
+        }`}
+      >
         <HugeiconsIcon
           icon={Search01Icon}
           strokeWidth={2}
-          className="size-3.5 shrink-0 text-muted-foreground"
+          className={`shrink-0 text-muted-foreground ${large ? "size-5" : "size-4"}`}
         />
         <input
           type="text"
@@ -97,11 +103,13 @@ export function TickerSearch({
           aria-expanded={open}
           aria-controls="ticker-options"
           aria-autocomplete="list"
+          aria-label="Search for a company ticker"
           autoComplete="off"
           spellCheck={false}
-          disabled={disabled}
           value={open ? query : ticker}
-          placeholder={open ? "Search a ticker or company…" : ticker}
+          placeholder={
+            open ? "Type a ticker or company name…" : ticker
+          }
           onFocus={() => {
             setOpen(true)
             setQuery("")
@@ -111,7 +119,9 @@ export function TickerSearch({
             setQuery(event.target.value.toUpperCase())
           }}
           onKeyDown={onKeyDown}
-          className="h-8 w-40 bg-transparent text-sm outline-none placeholder:text-muted-foreground disabled:opacity-50 sm:w-56"
+          className={`w-full bg-transparent outline-none placeholder:text-muted-foreground ${
+            large ? "text-base" : "text-sm"
+          }`}
         />
       </div>
 
@@ -119,15 +129,17 @@ export function TickerSearch({
         <div
           id="ticker-options"
           role="listbox"
-          className="absolute right-0 z-50 mt-1 max-h-72 w-80 overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
+          className="absolute left-0 right-0 z-50 mt-2 max-h-80 overflow-y-auto rounded-xl border bg-popover p-1.5 text-popover-foreground shadow-xl"
         >
           {loading && options.length === 0 ? (
-            <p className="px-2 py-1.5 text-xs text-muted-foreground">Searching…</p>
+            <p className="px-3 py-2 text-sm text-muted-foreground">
+              Searching SEC filings…
+            </p>
           ) : null}
 
           {!loading && options.length === 0 ? (
-            <p className="px-2 py-1.5 text-xs text-muted-foreground">
-              No matches. SEC lists US filers only.
+            <p className="px-3 py-2 text-sm text-muted-foreground">
+              No matches. SEC lists US filers only — no ETFs or indices.
             </p>
           ) : null}
 
@@ -140,12 +152,22 @@ export function TickerSearch({
               onMouseDown={(event) => event.preventDefault()}
               onMouseEnter={() => setHighlight(index)}
               onClick={() => choose(option)}
-              className={`flex w-full items-baseline gap-2 rounded px-2 py-1.5 text-left text-xs ${
-                index === highlight ? "bg-muted" : ""
-              }`}
+              className={`flex w-full items-baseline gap-3 rounded-lg px-3 text-left ${
+                large ? "py-2.5" : "py-1.5"
+              } ${index === highlight ? "bg-muted" : ""}`}
             >
-              <span className="w-14 shrink-0 font-medium">{option.ticker}</span>
-              <span className="min-w-0 flex-1 truncate text-muted-foreground">
+              <span
+                className={`shrink-0 font-semibold tabular-nums ${
+                  large ? "w-16 text-sm" : "w-14 text-xs"
+                }`}
+              >
+                {option.ticker}
+              </span>
+              <span
+                className={`min-w-0 flex-1 truncate text-muted-foreground ${
+                  large ? "text-sm" : "text-xs"
+                }`}
+              >
                 {option.name}
               </span>
               {option.pilot ? (

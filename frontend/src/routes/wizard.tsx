@@ -17,6 +17,7 @@ import {
 } from "@/lib/api"
 import type { ValuationResult } from "@/lib/chat"
 import { withPreview } from "@/lib/preview"
+import { SUPPORTED_TICKERS } from "@/lib/tickers"
 import {
   overridesFromSearch,
   validateWizardSearch,
@@ -117,23 +118,70 @@ function WizardPage() {
           <div className="min-w-0">
             <h1 className="text-lg font-semibold leading-tight">DCF Wizard</h1>
             <p className="truncate text-xs text-muted-foreground">
-              {valuation
-                ? `${valuation.company_name} · FY${valuation.history.at(-1)?.fiscal_year} 10-K · filed ${valuation.filing.filed}`
-                : "Inspecting the latest 10-K"}
+              Pick a company, then move the assumptions
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <TickerSearch
-            ticker={ticker}
-            onSelect={(next) => update({ ticker: next })}
-          />
-          <ModeToggle />
-        </div>
+        <ModeToggle />
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
-        <div className="mx-auto w-full max-w-5xl">
+        <div className="mx-auto w-full max-w-5xl space-y-4">
+          <section className="rounded-2xl border bg-card p-5 text-card-foreground shadow-sm">
+            <h2 className="text-lg font-semibold">Value any US public company</h2>
+            <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+              Search ~10,400 SEC filers by ticker or company name. Every number is
+              derived from the company&rsquo;s latest 10-K — no market estimates.
+            </p>
+
+            <div className="mt-4 max-w-2xl">
+              <TickerSearch
+                ticker={ticker}
+                size="lg"
+                onSelect={(next) => update({ ticker: next })}
+              />
+            </div>
+
+            <div className="mt-3 flex flex-wrap items-center gap-1.5">
+              <span className="mr-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                Pilots
+              </span>
+              {SUPPORTED_TICKERS.map((pilot) => (
+                <button
+                  key={pilot}
+                  type="button"
+                  onClick={() => update({ ticker: pilot })}
+                  className={`rounded-full border px-2.5 py-0.5 text-[11px] transition-colors ${
+                    pilot === ticker
+                      ? "border-primary bg-primary/10 font-medium text-foreground"
+                      : "border-border/60 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  }`}
+                >
+                  {pilot}
+                </button>
+              ))}
+            </div>
+
+            {valuation ? (
+              <div className="mt-4 flex flex-wrap items-baseline gap-x-3 gap-y-1 border-t border-border/60 pt-3 text-xs text-muted-foreground">
+                <span className="text-sm font-semibold text-foreground">
+                  {valuation.company_name}
+                </span>
+                <span>
+                  FY{valuation.history.at(-1)?.fiscal_year} 10-K · filed{" "}
+                  {valuation.filing.filed}
+                </span>
+                <a
+                  href={valuation.filing.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="underline underline-offset-2 hover:text-foreground"
+                >
+                  source
+                </a>
+              </div>
+            ) : null}
+          </section>
           {error ? (
             <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm">
               <p className="font-medium">Could not load {ticker}</p>
