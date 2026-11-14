@@ -28,7 +28,9 @@ WIZARD_SYSTEM_PROMPT = (
     "0-1 to reflect how well-sourced the change is (direct quote or FRED "
     "observation >= 0.9, general reasoning 0.6-0.8). Units: growth, tax, capex, "
     "wacc and terminal are percentages (4 means 4%); shares are millions; years is "
-    "an integer."
+    "an integer. For a relative change use 'delta' (for example +0.25 adds a "
+    "quarter point to the current effective value); 'value' is interpreted as an "
+    "absolute. The prompt lists the current effective values."
 )
 
 WIZARD_TOOLS: list[dict[str, Any]] = [
@@ -67,8 +69,9 @@ WIZARD_TOOLS: list[dict[str, Any]] = [
                                     ],
                                 },
                                 "value": {"type": ["number", "string"]},
+                                "delta": {"type": "number"},
                             },
-                            "required": ["key", "value"],
+                            "required": ["key"],
                         },
                     },
                     "evidence": {
@@ -277,9 +280,18 @@ def chat_reply(
 
     wizard_context = context or WizardContext()
     system += WIZARD_SYSTEM_PROMPT
-    system += "\n\nCURRENT WIZARD STATE (JSON): " + json.dumps(
+    system += "\n\nCURRENT WIZARD STATE (overrides only, JSON): " + json.dumps(
         wizard_context.model_dump()
     )
+    try:
+        effective, _value = wizard_proposals.effective_values(wizard_context)
+        if effective:
+            system += (
+                "\nEFFECTIVE VALUES (from the engine; use these for deltas): "
+                + json.dumps(effective)
+            )
+    except Exception:  # noqa: BLE001, S110 - the prompt is still usable without it
+        pass
 
     conversation: list[dict[str, Any]] = [{"role": "system", "content": system}, *limited]
     return _tool_loop(conversation, tools, wizard_context)

@@ -55,22 +55,56 @@ def overrides_from_context(context: WizardContext) -> DcfOverrides:
     )
 
 
-def _validate_change(raw: dict[str, Any]) -> tuple[str, float | str]:
+def _resolve_number(
+    key: str, raw: dict[str, Any], effective: dict[str, Any]
+) -> float:
+    """Accept an absolute value or a delta from the current effective value."""
+    current = effective.get(key)
+    if current is None:
+        raise ProposalError(f"No effective value for {key} to change")
+
+    delta = raw.get("delta")
+    if delta is not None:
+        try:
+            number = float(current) + float(delta)
+        except (TypeError, ValueError) as exc:
+            raise ProposalError(
+                f"{key} delta must be a number; current effective is {current}"
+            ) from exc
+        return round(number, 4)
+
+    value = raw.get("value")
+    if isinstance(value, str):
+        text = value.strip()
+        if text.startswith(("+", "-")):
+            try:
+                return round(float(current) + float(text), 4)
+            except ValueError:
+                pass
+    try:
+        return round(float(value), 4)
+    except (TypeError, ValueError) as exc:
+        raise ProposalError(
+            f"{key} needs an absolute number or a delta; current effective is "
+            f"{current}. Try {{'key': '{key}', 'delta': 0.25}} or "
+            f"{{'key': '{key}', 'value': {round(float(current) + 0.25, 2)}}}"
+        ) from exc
+
+
+def _validate_change(
+    raw: dict[str, Any], effective: dict[str, Any]
+) -> tuple[str, float | str]:
     key = str(raw.get("key") or "")
     if key not in BOUNDS:
         raise ProposalError(f"Unknown wizard key: {key}")
 
-    value = raw.get("value")
     if key == "model":
-        model = str(value or "").lower()
+        model = str(raw.get("value") or "").lower()
         if model not in ("fade", "constant"):
             raise ProposalError("Growth model must be 'fade' or 'constant'")
         return key, model
 
-    try:
-        number = float(value)
-    except (TypeError, ValueError) as exc:
-        raise ProposalError(f"{key} needs a numeric value") from exc
+    number = _resolve_number(key, raw, effective)
 
     low, high, _label = BOUNDS[key]
     if low is not None and high is not None:
@@ -78,10 +112,11 @@ def _validate_change(raw: dict[str, Any]) -> tuple[str, float | str]:
     return key, round(number, 4)
 
 
-def _before_values(
-    context: WizardContext, overrides: DcfOverrides
+def effective_values(
+    context: WizardContext, overrides: DcfOverrides | None = None
 ) -> tuple[dict[str, Any], float | None]:
     """Current effective values, from the real engine, in wizard units."""
+    overrides = overrides or overrides_from_context(context)
     try:
         result = valuation.analyze(context.ticker, overrides, allow_any=True)
     except Exception:  # noqa: BLE001 - proposals without impact are still useful
@@ -134,16 +169,16 @@ def build_proposal(
     if len(raw_changes) > MAX_CHANGES:
         raise ProposalError(f"At most {MAX_CHANGES} changes per proposal")
 
+    before_overrides = overrides_from_context(context)
+    before_values, value_before = effective_values(context, before_overrides)
+
     changes: list[tuple[str, float | str]] = []
     for raw in raw_changes:
         if isinstance(raw, dict):
-            changes.append(_validate_change(raw))
+            changes.append(_validate_change(raw, before_values))
 
     if not changes:
         raise ProposalError("No valid change survived validation")
-
-    before_overrides = overrides_from_context(context)
-    before_values, value_before = _before_values(context, before_overrides)
 
     updated = _context_with_changes(context, changes)
     value_after: float | None = None
