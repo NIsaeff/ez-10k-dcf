@@ -1,5 +1,8 @@
 import { useState } from "react"
 
+import { ArrowUpRight01Icon } from "@hugeicons/core-free-icons"
+import { HugeiconsIcon } from "@hugeicons/react"
+
 import { BreakdownChain } from "@/components/valuation/BreakdownChain"
 import { MetricGrid } from "@/components/valuation/MetricGrid"
 import {
@@ -183,7 +186,26 @@ export function DcfPanel({
             </div>
           </Control>
 
-          <div className="rounded-lg border border-border/60 bg-muted/20 p-2.5">
+          <div
+            role={growthReview ? "button" : undefined}
+            tabIndex={growthReview ? 0 : undefined}
+            aria-label={
+              growthReview ? "Open what the filing says about growth" : undefined
+            }
+            onClick={() => growthReview && setEvidenceOpen(true)}
+            onKeyDown={(event) => {
+              if (!growthReview) return
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault()
+                setEvidenceOpen(true)
+              }
+            }}
+            className={`group relative rounded-lg border border-border/60 bg-muted/20 p-2.5 ${
+              growthReview
+                ? "cursor-pointer transition-colors hover:border-primary/40 hover:bg-muted/40 focus-visible:border-primary/50 focus-visible:outline-none"
+                : ""
+            }`}
+          >
             <div className="flex items-baseline justify-between gap-2">
               <span className="text-xs text-muted-foreground">
                 Growth (year 1)
@@ -196,7 +218,11 @@ export function DcfPanel({
               </span>
             </div>
 
-            <div className="mt-2 flex items-center gap-2">
+            <div
+              className="mt-2 flex items-center gap-2"
+              onClick={(event) => event.stopPropagation()}
+              onKeyDown={(event) => event.stopPropagation()}
+            >
               <div className="min-w-0 flex-1">
                 <Slider
                   min={0}
@@ -220,11 +246,27 @@ export function DcfPanel({
             {growthReview ? (
               <button
                 type="button"
-                onClick={() => setEvidenceOpen(true)}
-                className="mt-1.5 inline-flex items-center gap-1 text-[10px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  setEvidenceOpen(true)
+                }}
+                className="mt-1.5 inline-flex items-center gap-1 pr-8 text-[10px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
               >
                 What the filing says · {growthReview.evidence.length} claims
               </button>
+            ) : null}
+
+            {growthReview ? (
+              <span
+                aria-hidden
+                className="absolute bottom-2 right-2 flex size-5 items-center justify-center rounded-md border border-border/60 bg-background text-muted-foreground transition-colors group-hover:border-primary/50 group-hover:text-foreground"
+              >
+                <HugeiconsIcon
+                  icon={ArrowUpRight01Icon}
+                  strokeWidth={2}
+                  className="size-3"
+                />
+              </span>
             ) : null}
           </div>
 
