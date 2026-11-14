@@ -1,7 +1,10 @@
+import { useState } from "react"
+
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
   ArrowUpRight01Icon,
   DatabaseIcon,
+  GlobeIcon,
   Search01Icon,
   SourceCodeIcon,
 } from "@hugeicons/core-free-icons"
@@ -145,7 +148,7 @@ export function ChatSources({ sources }: { sources?: SourceRef[] }) {
               >
                 <TraceLine>
                   <TraceIcon>
-                    <HugeiconsIcon icon={ArrowUpRight01Icon} strokeWidth={2} />
+                    <SourceFavicon url={source.url} />
                   </TraceIcon>
                   <TraceTitle>
                     {source.id}
@@ -155,6 +158,9 @@ export function ChatSources({ sources }: { sources?: SourceRef[] }) {
                       {source.date ? ` · ${source.date}` : ""}
                     </span>
                   </TraceTitle>
+                  <TraceIcon>
+                    <HugeiconsIcon icon={ArrowUpRight01Icon} strokeWidth={2} />
+                  </TraceIcon>
                   <span className="sr-only"> (opens in a new tab)</span>
                 </TraceLine>
               </a>
@@ -166,15 +172,49 @@ export function ChatSources({ sources }: { sources?: SourceRef[] }) {
   )
 }
 
-/** Readable one-liner for each MCP tool, matching the docs' tense rules. */
-function stepTitle(step: TraceStep): string {
+/**
+ * The source's own favicon — FRED serves /favicon.ico. Falls back to a globe
+ * glyph when the host has none or the image fails to load.
+ */
+function SourceFavicon({ url }: { url: string }) {
+  const [failed, setFailed] = useState(false)
+  const src = faviconUrl(url)
+
+  if (!src || failed) {
+    return <HugeiconsIcon icon={GlobeIcon} strokeWidth={2} />
+  }
+
+  return (
+    <img
+      src={src}
+      alt=""
+      aria-hidden="true"
+      loading="lazy"
+      className="size-3 rounded-[2px] object-contain"
+      onError={() => setFailed(true)}
+    />
+  )
+}
+
+function faviconUrl(url: string): string | null {
+  try {
+    return `${new URL(url).origin}/favicon.ico`
+  } catch {
+    return null
+  }
+}
+
+/** Readable one-liner for each MCP tool, matching the docs' tense rules. */function stepTitle(step: TraceStep): string {
   const failed = step.status === "error"
   const input = step.input
 
   switch (step.tool) {
     case "fred_get_series": {
       const series = asString(input.series_id) ?? "series"
-      return `${failed ? "Failed to fetch" : "Fetched"} ${series}`
+      // Same series can be fetched twice with different FRED transforms.
+      const units = asString(input.units)
+      const transform = units && units !== "lin" ? ` (${units})` : ""
+      return `${failed ? "Failed to fetch" : "Fetched"} ${series}${transform}`
     }
     case "fred_search": {
       const query = asString(input.search_text) ?? "macro data"

@@ -3,6 +3,7 @@ import { useState, type FormEvent } from "react"
 
 import { ModeToggle } from "@/components/mode-toggle"
 import { ChatSources, ChatTrace } from "@/components/ChatTrace"
+import { Markdown } from "@/components/Markdown"
 import { Bubble, BubbleContent } from "@/components/ui/bubble"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -115,7 +116,13 @@ function ChatPage() {
                             align={isUser ? "end" : "start"}
                             variant={isUser ? "default" : "muted"}
                           >
-                            <BubbleContent>{message.content}</BubbleContent>
+                            <BubbleContent>
+                            {isUser ? (
+                              message.content
+                            ) : (
+                              <Markdown text={message.content} />
+                            )}
+                          </BubbleContent>
                           </Bubble>
                           {message.valuation ? (
                             <ValuationCard valuation={message.valuation} />
