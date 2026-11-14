@@ -128,6 +128,7 @@ uv run python -m scripts.analyze_all        # all 9 tickers
 - [`docs/valuation-spec.md`](docs/valuation-spec.md)
 - [`docs/qa-report.md`](docs/qa-report.md)
 - [`docs/backlog.md`](docs/backlog.md) — understood but unscheduled work
+- [`docs/narrative-layer.md`](docs/narrative-layer.md) — 10-K prose / AI recommendations
 
 ## Reference
 
