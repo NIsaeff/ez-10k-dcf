@@ -214,7 +214,12 @@ function WizardPage() {
           ) : null}
 
           {valuation && previewed ? (
-            <Tabs defaultValue="fcff">
+            <Tabs
+              value={search.tab ?? "fcff"}
+              onValueChange={(value) =>
+                update({ tab: value as NonNullable<typeof search.tab> })
+              }
+            >
               <TabsList>
                 <TabsTrigger value="fcff">FCFF</TabsTrigger>
                 <TabsTrigger value="wacc">WACC</TabsTrigger>

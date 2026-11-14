@@ -62,6 +62,18 @@ def _last_user_message(payload: ChatRequest) -> str:
     return payload.messages[-1].content
 
 
+# Messages that ask the workspace to change or move must reach the tool loop,
+# even when they name a ticker; otherwise the valuation shortcut swallows them.
+WIZARD_INTENT = re.compile(
+    r"\b(set|change|adjust|update|open|switch|show|propose|assum\w*|what if|filing|tab|slider)\b",
+    re.IGNORECASE,
+)
+
+
+def _wizard_intent(text: str) -> bool:
+    return bool(WIZARD_INTENT.search(text))
+
+
 def _detect_ticker(text: str) -> str | None:
     supported = set(SUPPORTED_TICKERS)
     for token in re.findall(r"\b[A-Za-z]{1,5}\b", text):
@@ -441,7 +453,7 @@ def chat(payload: ChatRequest) -> ChatResponse:
     text = _last_user_message(payload)
     ticker = _detect_ticker(text)
 
-    if ticker:
+    if ticker and not _wizard_intent(text):
         try:
             result = valuation.analyze(ticker)
         except InsufficientData as exc:
@@ -461,8 +473,9 @@ def chat(payload: ChatRequest) -> ChatResponse:
         return ChatResponse(reply=llm.narrate_valuation(result), valuation=result)
 
     try:
-        reply, trace = llm.chat_reply(
-            [message.model_dump() for message in payload.messages]
+        reply, trace, proposals = llm.chat_reply(
+            [message.model_dump() for message in payload.messages],
+            context=payload.context,
         )
     except Exception:  # noqa: BLE001 - chat fallback
         reply = (
@@ -470,8 +483,10 @@ def chat(payload: ChatRequest) -> ChatResponse:
             f"Try: 'value KO'. Supported: {', '.join(SUPPORTED_TICKERS)}."
         )
         trace = []
+        proposals = []
     return ChatResponse(
         reply=reply,
+        proposals=proposals,
         tools_used=[step["tool"] for step in trace],
         trace=trace,
         sources=fred_mcp.series_sources(trace),

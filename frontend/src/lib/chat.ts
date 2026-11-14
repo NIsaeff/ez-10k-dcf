@@ -128,11 +128,56 @@ export type ChatMessage = {
   sources?: SourceRef[];
 };
 
+export type WizardContext = {
+  ticker: string;
+  years: number;
+  terminal: number;
+  model: GrowthModel;
+  wacc?: number;
+  growth?: number;
+  tax?: number;
+  capex?: number;
+  shares?: number;
+  tab?: string;
+};
+
+export type ProposalChange = {
+  key: string;
+  label: string;
+  before: number | string | null;
+  after: number | string;
+  confidence: number;
+};
+
+export type ProposalEvidence = {
+  type: string;
+  label: string;
+  ref: string | null;
+  quote: string | null;
+};
+
+export type Proposal = {
+  id: string;
+  kind: "assumptions" | "navigate";
+  title: string;
+  changes: ProposalChange[];
+  rationale: string;
+  evidence: ProposalEvidence[];
+  impact: { value_before: number; value_after: number } | null;
+  confidence: number;
+  navigation: {
+    ticker: string | null;
+    tab: string | null;
+    claim_id: string | null;
+  } | null;
+};
+
 export type ChatReply = {
   reply: string;
   valuation: ValuationResult | null;
   trace: TraceStep[];
   sources: SourceRef[];
+  proposals: Proposal[];
 };
 
 // TODO(chat-history): every request sends the full conversation, so payload
@@ -140,12 +185,16 @@ export type ChatReply = {
 // session). When persistence lands, send only { conversation_id, message }
 // and keep history server-side — or at minimum trim to the last N messages /
 // a token budget before calling the model.
-export async function sendChat(messages: ChatMessage[]): Promise<ChatReply> {
+export async function sendChat(
+  messages: ChatMessage[],
+  context?: WizardContext,
+): Promise<ChatReply> {
   const res = await fetch("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       messages: messages.map(({ role, content }) => ({ role, content })),
+      context,
     }),
   });
 
@@ -157,5 +206,6 @@ export async function sendChat(messages: ChatMessage[]): Promise<ChatReply> {
     valuation: data.valuation ?? null,
     trace: data.trace ?? [],
     sources: data.sources ?? [],
+    proposals: data.proposals ?? [],
   };
 }

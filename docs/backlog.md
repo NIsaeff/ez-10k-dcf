@@ -5,6 +5,22 @@ actionable without re-reading the conversation that produced it.
 
 ---
 
+## Auto-apply low-risk wizard actions
+
+**Status:** not started · **Area:** chat + wizard · **Captured:** 2026-11-14
+
+Chat can now propose wizard changes (`propose_wizard_change`,
+`propose_navigation`) and the human confirms them. The next step is to let
+*low-risk* actions apply without a click for users who opt in.
+
+- Only `navigate` proposals are candidates; assumption changes always confirm.
+- Confidence must clear a threshold (for example ≥ 0.95) and the user must enable
+  the preference; default stays off.
+- Requires the proposal log first: measure how often proposals are applied vs
+  discarded before trusting the model to act alone.
+
+---
+
 ## Any-ticker DCF with typed incompatibility feedback
 
 **Status:** not started · **Area:** engine + wizard · **Captured:** 2026-11-14

@@ -18,6 +18,8 @@ export type WizardSearch = {
   capex?: number
   /** Share-count override, in millions. */
   shares?: number
+  /** Active DCF tab. */
+  tab?: "fcff" | "wacc" | "dcf"
 }
 
 const TICKER_PATTERN = /^[A-Z0-9.-]{1,10}$/
@@ -92,6 +94,10 @@ export function validateWizardSearch(
     tax: optionalPercent(search.tax, 0, 40),
     capex: optionalPercent(search.capex, 0, 40),
     shares,
+    tab:
+      search.tab === "fcff" || search.tab === "wacc" || search.tab === "dcf"
+        ? search.tab
+        : undefined,
   }
 }
 

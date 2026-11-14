@@ -108,7 +108,7 @@ def test_chat_reply_executes_tool_then_answers(monkeypatch) -> None:
     )
     monkeypatch.setattr(llm, "get_client", lambda: client)
 
-    reply, trace = llm.chat_reply([{"role": "user", "content": "10Y yield?"}])
+    reply, trace, _proposals = llm.chat_reply([{"role": "user", "content": "10Y yield?"}])
 
     assert reply == "The 10Y yield is 4.12%."
     assert [step["tool"] for step in trace] == ["fred_get_series"]
@@ -139,7 +139,7 @@ def test_chat_reply_reports_tool_errors_to_the_model(monkeypatch) -> None:
     )
     monkeypatch.setattr(llm, "get_client", lambda: client)
 
-    reply, trace = llm.chat_reply([{"role": "user", "content": "10Y?"}])
+    reply, trace, _proposals = llm.chat_reply([{"role": "user", "content": "10Y?"}])
 
     assert reply == "I couldn't reach FRED."
     assert [step["status"] for step in trace] == ["error"]
@@ -147,14 +147,28 @@ def test_chat_reply_reports_tool_errors_to_the_model(monkeypatch) -> None:
     assert tool_turn["content"].startswith("ERROR calling fred_get_series")
 
 
-def test_chat_reply_skips_tools_when_unconfigured(monkeypatch) -> None:
+def test_chat_reply_skips_fred_tools_when_unconfigured(monkeypatch) -> None:
     monkeypatch.setattr(fred_mcp.settings, "fred_api_key", "")
-    monkeypatch.setattr(llm, "complete", lambda messages, **_: "plain reply")
+    seen: dict[str, list[str]] = {}
 
-    reply, trace = llm.chat_reply([{"role": "user", "content": "hi"}])
+    class _Message:
+        def __init__(self) -> None:
+            self.content = "plain reply"
+            self.tool_calls: list = []
+
+    def fake_complete(messages, tools):
+        seen["tools"] = [tool["function"]["name"] for tool in tools]
+        return _Message()
+
+    monkeypatch.setattr(llm, "_complete_with_tools", fake_complete)
+
+    reply, trace, _proposals = llm.chat_reply([{"role": "user", "content": "hi"}])
 
     assert reply == "plain reply"
     assert trace == []
+    assert "fred_get_series" not in seen["tools"]
+    # Wizard tools stay available even without FRED.
+    assert "propose_wizard_change" in seen["tools"]
 
 
 def test_chat_reply_survives_a_broken_mcp_server(monkeypatch) -> None:
@@ -165,11 +179,25 @@ def test_chat_reply_survives_a_broken_mcp_server(monkeypatch) -> None:
         raise fred_mcp.FredMCPError("Connection closed")
 
     monkeypatch.setattr(fred_mcp, "openai_tools", boom)
-    monkeypatch.setattr(llm, "complete", lambda messages, **_: "plain reply")
 
-    reply, trace = llm.chat_reply([{"role": "user", "content": "hi"}])
+    class _Message:
+        def __init__(self) -> None:
+            self.content = "plain reply"
+            self.tool_calls: list = []
 
-    assert (reply, trace) == ("plain reply", [])
+    seen: dict[str, list[str]] = {}
+
+    def fake_complete(messages, tools):
+        seen["tools"] = [tool["function"]["name"] for tool in tools]
+        return _Message()
+
+    monkeypatch.setattr(llm, "_complete_with_tools", fake_complete)
+
+    reply, trace, _proposals = llm.chat_reply([{"role": "user", "content": "hi"}])
+
+    assert reply == "plain reply"
+    assert trace == []
+    assert seen["tools"] == ["propose_wizard_change", "propose_navigation", "wizard_explain_assumption"]
 
 
 def test_series_sources_reads_only_successful_get_series() -> None:

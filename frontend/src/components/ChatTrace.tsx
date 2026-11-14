@@ -43,7 +43,7 @@ export function ChatTrace({
           <TraceIcon>
             <HugeiconsIcon icon={Search01Icon} strokeWidth={2} />
           </TraceIcon>
-          <TraceTitle>Researching FRED…</TraceTitle>
+          <TraceTitle>Working…</TraceTitle>
         </TraceLine>
       </Trace>
     )
@@ -53,9 +53,18 @@ export function ChatTrace({
   if (steps.length === 0) return null
 
   const failed = steps.filter((step) => step.status === "error").length
+  const tools = steps.map((step) => step.tool)
+  const hasFred = tools.some((tool) => tool.startsWith("fred_"))
+  const hasWizard = tools.some(
+    (tool) => tool.startsWith("propose_") || tool.startsWith("wizard_"),
+  )
   const summary = failed
-    ? `FRED research failed (${failed} of ${steps.length})`
-    : `Researched FRED in ${steps.length} step${steps.length === 1 ? "" : "s"}`
+    ? `${hasWizard && !hasFred ? "Proposal" : "Research"} failed (${failed} of ${steps.length})`
+    : hasWizard && !hasFred
+      ? `Prepared ${steps.length} proposal${steps.length === 1 ? "" : "s"}`
+      : hasFred && !hasWizard
+        ? `Researched FRED in ${steps.length} step${steps.length === 1 ? "" : "s"}`
+        : `Used ${steps.length} tool${steps.length === 1 ? "" : "s"}`
 
   return (
     <Trace>

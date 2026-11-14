@@ -11,8 +11,57 @@ class ChatMessage(BaseModel):
     content: str = Field(min_length=1)
 
 
+class WizardContext(BaseModel):
+    """Current wizard state, mirrored from the URL by the frontend."""
+
+    ticker: str = "KO"
+    years: int = 5
+    terminal: float = 2.5
+    model: GrowthModel = "fade"
+    wacc: float | None = None
+    growth: float | None = None
+    tax: float | None = None
+    capex: float | None = None
+    shares: float | None = None
+    tab: str | None = None
+
+
+class ProposalChange(BaseModel):
+    key: str
+    label: str
+    before: float | str | None = None
+    after: float | str
+    confidence: float = 0.6
+
+
+class ProposalEvidence(BaseModel):
+    type: str = "note"
+    label: str = ""
+    ref: str | None = None
+    quote: str | None = None
+
+
+class ProposalNavigation(BaseModel):
+    ticker: str | None = None
+    tab: str | None = None
+    claim_id: str | None = None
+
+
+class Proposal(BaseModel):
+    id: str
+    kind: Literal["assumptions", "navigate"]
+    title: str
+    changes: list[ProposalChange] = Field(default_factory=list)
+    rationale: str = ""
+    evidence: list[ProposalEvidence] = Field(default_factory=list)
+    impact: dict[str, float] | None = None
+    confidence: float = 0.6
+    navigation: ProposalNavigation | None = None
+
+
 class ChatRequest(BaseModel):
     messages: list[ChatMessage] = Field(min_length=1)
+    context: WizardContext | None = None
 
 
 class FilingInfo(BaseModel):
@@ -306,6 +355,7 @@ class SourceRef(BaseModel):
 class ChatResponse(BaseModel):
     reply: str
     valuation: ValuationResult | None = None
+    proposals: list[Proposal] = Field(default_factory=list)
     tools_used: list[str] = Field(default_factory=list)
     trace: list[TraceStep] = Field(default_factory=list)
     sources: list[SourceRef] = Field(default_factory=list)

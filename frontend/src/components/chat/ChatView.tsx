@@ -3,6 +3,7 @@ import { HugeiconsIcon } from "@hugeicons/react"
 import { useState, type FormEvent } from "react"
 
 import { ChatSources, ChatTrace } from "@/components/ChatTrace"
+import { ProposalCard, ProposalQueue } from "@/components/chat/ProposalCard"
 import { Markdown } from "@/components/Markdown"
 import { Bubble, BubbleContent } from "@/components/ui/bubble"
 import { Button } from "@/components/ui/button"
@@ -30,7 +31,7 @@ const MACRO_SERIES = [
 ]
 
 export function ChatView({ compact = false }: { compact?: boolean }) {
-  const { messages, isSending, send } = useChatPanel()
+  const { messages, isSending, send, proposalsFor } = useChatPanel()
   const [draft, setDraft] = useState("")
   const [series, setSeries] = useState<Set<string>>(new Set())
 
@@ -121,6 +122,9 @@ export function ChatView({ compact = false }: { compact?: boolean }) {
                             </a>
                           ) : null}
                           <ChatSources sources={message.sources} />
+                          {proposalsFor(message.id).map((entry) => (
+                            <ProposalCard key={entry.proposal.id} entry={entry} />
+                          ))}
                         </MessageContent>
                       </Message>
                     </MessageScrollerItem>
@@ -201,6 +205,8 @@ export function ChatView({ compact = false }: { compact?: boolean }) {
             </div>
           </details>
         </div>
+        <ProposalQueue />
+
         <form
           onSubmit={onSubmit}
           className={`flex w-full gap-2 ${compact ? "" : "mx-auto max-w-3xl"}`}

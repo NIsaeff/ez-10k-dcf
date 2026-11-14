@@ -8,8 +8,8 @@ from typing import Any
 from openai import OpenAI
 
 from app.config import settings
-from app.schemas import ValuationResult
-from app.services import fred_mcp
+from app.schemas import Proposal, ValuationResult, WizardContext
+from app.services import fred_mcp, wizard_proposals
 
 CHAT_SYSTEM_PROMPT = (
     "You are EZ-10k, a concise assistant for 10-K financial analysis and DCF "
@@ -17,6 +17,112 @@ CHAT_SYSTEM_PROMPT = (
     "ticker (AAPL, MSFT, GOOGL, AMZN, NVDA, META, TSLA, KO, PWR). Do not invent "
     "financial figures."
 )
+
+WIZARD_SYSTEM_PROMPT = (
+    " You can also drive the DCF wizard. The current wizard state is in the JSON "
+    "context. When the user asks to change an assumption, or asks a what-if, call "
+    "propose_wizard_change with 1-5 changes; when they ask to open a company, a tab "
+    "or a filing claim, call propose_navigation. Call "
+    "wizard_explain_assumption first when the proposal rests on filing language. "
+    "Never say a change was applied: the human must confirm it. Set confidence "
+    "0-1 to reflect how well-sourced the change is (direct quote or FRED "
+    "observation >= 0.9, general reasoning 0.6-0.8). Units: growth, tax, capex, "
+    "wacc and terminal are percentages (4 means 4%); shares are millions; years is "
+    "an integer."
+)
+
+WIZARD_TOOLS: list[dict[str, Any]] = [
+    {
+        "type": "function",
+        "function": {
+            "name": "propose_wizard_change",
+            "description": (
+                "Propose changes to the DCF wizard. Does NOT apply them; the user "
+                "confirms in the interface."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string"},
+                    "rationale": {"type": "string"},
+                    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+                    "changes": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 5,
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "key": {
+                                    "type": "string",
+                                    "enum": [
+                                        "growth",
+                                        "tax",
+                                        "capex",
+                                        "wacc",
+                                        "terminal",
+                                        "years",
+                                        "shares",
+                                        "model",
+                                    ],
+                                },
+                                "value": {"type": ["number", "string"]},
+                            },
+                            "required": ["key", "value"],
+                        },
+                    },
+                    "evidence": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "type": {"type": "string"},
+                                "label": {"type": "string"},
+                                "ref": {"type": "string"},
+                                "quote": {"type": "string"},
+                            },
+                        },
+                    },
+                },
+                "required": ["title", "rationale", "confidence", "changes"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "propose_navigation",
+            "description": (
+                "Propose opening a company, a wizard tab or a filing claim. The "
+                "user confirms before the workspace moves."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string"},
+                    "rationale": {"type": "string"},
+                    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+                    "ticker": {"type": "string"},
+                    "tab": {"type": "string", "enum": ["fcff", "wacc", "dcf", "filing"]},
+                    "claim_id": {"type": "string"},
+                },
+                "required": ["title", "rationale"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "wizard_explain_assumption",
+            "description": "Read the filing review (quotes, stance) for an assumption.",
+            "parameters": {
+                "type": "object",
+                "properties": {"key": {"type": "string", "enum": ["growth"]}},
+                "required": ["key"],
+            },
+        },
+    },
+]
 
 FRED_SYSTEM_PROMPT = (
     " You also have FRED macro tools (fred_search, fred_browse, fred_get_series). "
@@ -149,34 +255,43 @@ def complete(
     return content
 
 
-def chat_reply(messages: list[dict[str, str]]) -> tuple[str, list[dict[str, Any]]]:
-    """Answer a chat turn, using FRED MCP tools when they are configured.
+def chat_reply(
+    messages: list[dict[str, str]],
+    context: WizardContext | None = None,
+) -> tuple[str, list[dict[str, Any]], list[Proposal]]:
+    """Answer a chat turn with FRED and wizard tools.
 
-    Returns the reply text plus the tool trace (one entry per MCP call) so the
-    UI can show what the assistant actually looked up.
+    Returns (reply, tool trace, proposals). Proposals are never applied here.
     """
     limited = messages[-20:]
     system = CHAT_SYSTEM_PROMPT
-    tools: list[dict[str, Any]] = []
+    tools: list[dict[str, Any]] = list(WIZARD_TOOLS)
 
     if fred_mcp.configured():
         try:
-            tools = fred_mcp.openai_tools()
+            tools.extend(fred_mcp.openai_tools())
             system += FRED_SYSTEM_PROMPT
         except fred_mcp.FredMCPError:
             # A broken MCP server must not take the whole chat down.
-            tools = []
+            pass
+
+    wizard_context = context or WizardContext()
+    system += WIZARD_SYSTEM_PROMPT
+    system += "\n\nCURRENT WIZARD STATE (JSON): " + json.dumps(
+        wizard_context.model_dump()
+    )
 
     conversation: list[dict[str, Any]] = [{"role": "system", "content": system}, *limited]
-    if not tools:
-        return complete(conversation), []
-    return _tool_loop(conversation, tools)
+    return _tool_loop(conversation, tools, wizard_context)
 
 
 def _tool_loop(
-    conversation: list[dict[str, Any]], tools: list[dict[str, Any]]
-) -> tuple[str, list[dict[str, Any]]]:
+    conversation: list[dict[str, Any]],
+    tools: list[dict[str, Any]],
+    context: WizardContext,
+) -> tuple[str, list[dict[str, Any]], list[Proposal]]:
     trace: list[dict[str, Any]] = []
+    proposals: list[Proposal] = []
 
     for _ in range(MAX_TOOL_ROUNDS):
         try:
@@ -186,15 +301,15 @@ def _tool_loop(
 
         calls = list(message.tool_calls or [])
         if not calls:
-            return (message.content or ""), trace
+            return (message.content or ""), trace, proposals
 
         conversation.append(_assistant_turn(message.content, calls))
         for call in calls:
-            turn, step = _tool_turn(call)
+            turn, step = _tool_turn(call, context, proposals)
             conversation.append(turn)
             trace.append(step)
 
-    return complete(conversation), trace
+    return complete(conversation), trace, proposals
 
 
 def _complete_with_tools(
@@ -227,19 +342,50 @@ def _assistant_turn(content: str | None, calls: list[Any]) -> dict[str, Any]:
     }
 
 
-def _tool_turn(call: Any) -> tuple[dict[str, Any], dict[str, Any]]:
+def _tool_turn(
+    call: Any,
+    context: WizardContext,
+    proposals: list[Proposal],
+) -> tuple[dict[str, Any], dict[str, Any]]:
     arguments: dict[str, Any] = {}
     status = "ok"
     started = time.perf_counter()
+    name = call.function.name
 
     try:
         parsed = json.loads(call.function.arguments or "{}")
         if isinstance(parsed, dict):
             arguments = parsed
-        content = fred_mcp.call_tool(call.function.name, arguments)
+
+        if name == "propose_wizard_change":
+            proposal = wizard_proposals.build_proposal(context, arguments)
+            proposals.append(proposal)
+            content = json.dumps(
+                {
+                    "status": "recorded",
+                    "proposal_id": proposal.id,
+                    "note": "The user must confirm before it is applied.",
+                }
+            )
+        elif name == "propose_navigation":
+            proposal = wizard_proposals.build_navigation(context, arguments)
+            proposals.append(proposal)
+            content = json.dumps(
+                {
+                    "status": "recorded",
+                    "proposal_id": proposal.id,
+                    "note": "The user must confirm before the workspace moves.",
+                }
+            )
+        elif name == "wizard_explain_assumption":
+            content = wizard_proposals.explain(
+                context, str(arguments.get("key") or "growth")
+            )
+        else:
+            content = fred_mcp.call_tool(name, arguments)
     except Exception as exc:  # noqa: BLE001 - report the failure to the model
         status = "error"
-        content = f"ERROR calling {call.function.name}: {exc}"
+        content = f"ERROR calling {name}: {exc}"
 
     step = {
         "tool": call.function.name,

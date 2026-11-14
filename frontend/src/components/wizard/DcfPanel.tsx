@@ -3,6 +3,11 @@ import { useState } from "react"
 import { ArrowUpRight01Icon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 
+import { useChatPanel } from "@/components/chat/ChatPanel"
+import {
+  confidenceClasses,
+  formatChangeValue,
+} from "@/components/chat/ProposalCard"
 import { BreakdownChain } from "@/components/valuation/BreakdownChain"
 import { MetricGrid } from "@/components/valuation/MetricGrid"
 import {
@@ -74,6 +79,8 @@ export function DcfPanel({
   growthReview: AssumptionReview | null
 }) {
   const [evidenceOpen, setEvidenceOpen] = useState(false)
+  const { active: activeProposal, apply: applyProposal, discard: discardProposal } =
+    useChatPanel()
   const summary = valuation.valuation
   const assumptions = valuation.assumptions
   const pvFcff = valuation.projection.reduce(
@@ -101,6 +108,62 @@ export function DcfPanel({
             {pending ? "recalculating…" : "up to date"}
           </span>
         </div>
+
+        {activeProposal ? (
+          <div
+            className={`mt-3 rounded-lg border p-2.5 ${confidenceClasses(activeProposal.proposal.confidence)}`}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[11px] font-medium">
+                Proposed · {activeProposal.proposal.title}
+              </p>
+              <span className="text-[9px] uppercase tracking-wide text-muted-foreground">
+                {Math.round(activeProposal.proposal.confidence * 100)}% sure
+              </span>
+            </div>
+            <div className="mt-1 space-y-0.5">
+              {activeProposal.proposal.changes.map((change) => (
+                <div
+                  key={change.key}
+                  className="flex items-baseline gap-1.5 text-[11px]"
+                >
+                  <span className="text-muted-foreground">{change.label}</span>
+                  <span className="tabular-nums text-muted-foreground">
+                    {formatChangeValue(change.key, change.before)}
+                  </span>
+                  <span className="text-muted-foreground">→</span>
+                  <span className="font-medium tabular-nums">
+                    {formatChangeValue(change.key, change.after)}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <div className="mt-1.5 flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => applyProposal(activeProposal)}
+                aria-label="Apply proposed changes"
+                className="flex size-5 items-center justify-center rounded-md border border-emerald-600/50 bg-emerald-500/10 text-[11px] text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-300"
+              >
+                ✓
+              </button>
+              <button
+                type="button"
+                onClick={() => discardProposal(activeProposal)}
+                aria-label="Discard proposed changes"
+                className="flex size-5 items-center justify-center rounded-md border border-red-500/40 text-[11px] text-red-600 hover:bg-red-500/10 dark:text-red-400"
+              >
+                ✗
+              </button>
+              {activeProposal.proposal.impact ? (
+                <span className="ml-auto text-[10px] text-muted-foreground tabular-nums">
+                  ${activeProposal.proposal.impact.value_before.toFixed(2)} → $
+                  {activeProposal.proposal.impact.value_after.toFixed(2)}
+                </span>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
 
         <div className="mt-3 grid gap-4 sm:grid-cols-2">
           <Control label="Projection years" value={`${search.years}`}>

@@ -65,7 +65,8 @@ def test_chat_values_a_ticker(monkeypatch) -> None:
 
 def test_chat_plain_message_uses_llm(monkeypatch) -> None:
     monkeypatch.setattr(
-        "app.main.llm.chat_reply", lambda messages: ("Hello there.", [])
+        "app.main.llm.chat_reply",
+        lambda messages, context=None: ("Hello there.", [], []),
     )
     response = client.post(
         "/api/chat",
@@ -75,6 +76,7 @@ def test_chat_plain_message_uses_llm(monkeypatch) -> None:
     assert response.json() == {
         "reply": "Hello there.",
         "valuation": None,
+        "proposals": [],
         "tools_used": [],
         "trace": [],
         "sources": [],
@@ -95,7 +97,8 @@ def test_chat_reports_the_tool_trace_and_sources(monkeypatch) -> None:
         }
     ]
     monkeypatch.setattr(
-        "app.main.llm.chat_reply", lambda messages: ("10Y is 5.10%.", trace)
+        "app.main.llm.chat_reply",
+        lambda messages, context=None: ("10Y is 5.10%.", trace, []),
     )
     response = client.post(
         "/api/chat",
