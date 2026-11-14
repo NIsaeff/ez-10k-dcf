@@ -16,63 +16,20 @@ import {
   MessageScrollerProvider,
   MessageScrollerViewport,
 } from "@/components/ui/message-scroller"
-import { sendChat, type ChatMessage } from "@/lib/chat"
+import { useChatPanel } from "@/components/chat/ChatPanel"
 import { perShare } from "@/lib/format"
 import { SUPPORTED_TICKERS } from "@/lib/tickers"
 
-const initialMessages: ChatMessage[] = [
-  {
-    id: "assistant-1",
-    role: "assistant",
-    content:
-      "Ask me to value a company from its latest 10-K — “value KO”, “value AAPL”, “value PWR” — or ask about a macro series such as the 10-year yield, CPI, or GDP.",
-  },
-]
-
 export function ChatView({ compact = false }: { compact?: boolean }) {
-  const [messages, setMessages] = useState<ChatMessage[]>(initialMessages)
+  const { messages, isSending, send } = useChatPanel()
   const [draft, setDraft] = useState("")
-  const [isSending, setIsSending] = useState(false)
 
-  const send = async (event: FormEvent<HTMLFormElement>) => {
+  const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const text = draft.trim()
     if (!text || isSending) return
-
-    const next: ChatMessage[] = [
-      ...messages,
-      { id: crypto.randomUUID(), role: "user", content: text },
-    ]
-    setMessages(next)
     setDraft("")
-    setIsSending(true)
-
-    try {
-      const { reply, valuation, trace, sources } = await sendChat(next)
-      setMessages((current) => [
-        ...current,
-        {
-          id: crypto.randomUUID(),
-          role: "assistant",
-          content: reply,
-          valuation,
-          trace,
-          sources,
-        },
-      ])
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      setMessages((current) => [
-        ...current,
-        {
-          id: crypto.randomUUID(),
-          role: "assistant",
-          content: `Request failed: ${message}`,
-        },
-      ])
-    } finally {
-      setIsSending(false)
-    }
+    void send(text)
   }
 
   return (
@@ -171,7 +128,7 @@ export function ChatView({ compact = false }: { compact?: boolean }) {
           ))}
         </div>
         <form
-          onSubmit={send}
+          onSubmit={onSubmit}
           className={`flex w-full gap-2 ${compact ? "" : "mx-auto max-w-3xl"}`}
         >
           <Input

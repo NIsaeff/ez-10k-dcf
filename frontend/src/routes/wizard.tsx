@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router"
 import { useEffect, useMemo, useState } from "react"
 
-import { ChatToggle } from "@/components/chat/ChatPanel"
+import { ChatPanel, ChatToggle } from "@/components/chat/ChatPanel"
 import { ModeToggle } from "@/components/mode-toggle"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -144,8 +144,9 @@ function WizardPage() {
         </div>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-4">
-        <div className="mx-auto w-full max-w-5xl space-y-4">
+      <div className="flex min-h-0 flex-1">
+        <div className="min-h-0 flex-1 overflow-y-auto p-4">
+          <div className="mx-auto w-full max-w-5xl space-y-4">
           <section className="rounded-2xl border bg-card p-5 text-card-foreground shadow-sm">
             <h2 className="text-lg font-semibold">Value any US public company</h2>
             <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
@@ -243,7 +244,9 @@ function WizardPage() {
               </TabsContent>
             </Tabs>
           ) : null}
+          </div>
         </div>
+        <ChatPanel />
       </div>
     </>
   )

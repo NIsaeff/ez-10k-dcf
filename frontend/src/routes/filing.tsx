@@ -5,7 +5,7 @@ import { useEffect, useState } from "react"
 
 import { ClaimTree } from "@/components/filing/ClaimTree"
 import { FilingFrame } from "@/components/filing/FilingFrame"
-import { ChatToggle } from "@/components/chat/ChatPanel"
+import { ChatPanel, ChatToggle } from "@/components/chat/ChatPanel"
 import { ModeToggle } from "@/components/mode-toggle"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { TickerSearch } from "@/components/wizard/TickerSearch"
@@ -165,6 +165,8 @@ function FilingPage() {
         </div>
       </header>
 
+      <div className="flex min-h-0 flex-1">
+        <div className="flex min-h-0 flex-1 flex-col">
       {loading ? (
         <div className="border-b bg-muted/30 px-4 py-2 text-xs text-muted-foreground">
           Reading {ticker}&rsquo;s 10-K and extracting claims… {elapsed}s
@@ -262,6 +264,9 @@ function FilingPage() {
           </section>
         </div>
       ) : null}
+        </div>
+        <ChatPanel />
+      </div>
     </>
   )
 }
