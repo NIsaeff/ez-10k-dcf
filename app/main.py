@@ -320,7 +320,7 @@ def chat(payload: ChatRequest) -> ChatResponse:
         return ChatResponse(reply=llm.narrate_valuation(result), valuation=result)
 
     try:
-        reply = llm.chat_reply(
+        reply, tools_used = llm.chat_reply(
             [message.model_dump() for message in payload.messages]
         )
     except Exception:  # noqa: BLE001 - chat fallback
@@ -328,7 +328,8 @@ def chat(payload: ChatRequest) -> ChatResponse:
             "I can value a supported ticker from its latest 10-K. "
             f"Try: 'value KO'. Supported: {', '.join(SUPPORTED_TICKERS)}."
         )
-    return ChatResponse(reply=reply)
+        tools_used = []
+    return ChatResponse(reply=reply, tools_used=tools_used)
 
 
 if settings.frontend_dist.is_dir():

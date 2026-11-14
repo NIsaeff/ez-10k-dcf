@@ -5,6 +5,7 @@ description = "Parsity capstone: 10-K extraction and DCF valuation"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi[standard]>=0.141.0",
+    "mcp>=1.25",
     "openai>=3.49.0",
     "pydantic-settings>=2.16.2",
     "selectolax>=1.0.2",

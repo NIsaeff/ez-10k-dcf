@@ -25,5 +25,11 @@ class Settings(BaseSettings):
     sec_user_agent: str = "EZ-10k Capstone (contact@example.com)"
     data_dir: Path = ROOT_DIR / "data"
 
+    # FRED macro data. This app owns the key: it reads FRED_API_KEY here and
+    # passes it to the third-party `fred-mcp-server` child process's environment.
+    fred_api_key: str = ""
+    fred_mcp_enabled: bool = True
+    fred_mcp_package: str = "fred-mcp-server"
+
 
 settings = Settings()

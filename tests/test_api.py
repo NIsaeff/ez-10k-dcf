@@ -64,13 +64,32 @@ def test_chat_values_a_ticker(monkeypatch) -> None:
 
 
 def test_chat_plain_message_uses_llm(monkeypatch) -> None:
-    monkeypatch.setattr("app.main.llm.chat_reply", lambda messages: "Hello there.")
+    monkeypatch.setattr(
+        "app.main.llm.chat_reply", lambda messages: ("Hello there.", [])
+    )
     response = client.post(
         "/api/chat",
         json={"messages": [{"role": "user", "content": "hello"}]},
     )
     assert response.status_code == 200
-    assert response.json() == {"reply": "Hello there.", "valuation": None}
+    assert response.json() == {
+        "reply": "Hello there.",
+        "valuation": None,
+        "tools_used": [],
+    }
+
+
+def test_chat_reports_mcp_tools_used(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "app.main.llm.chat_reply",
+        lambda messages: ("10Y is 4.1%.", ["fred_get_series"]),
+    )
+    response = client.post(
+        "/api/chat",
+        json={"messages": [{"role": "user", "content": "10 year yield?"}]},
+    )
+    assert response.status_code == 200
+    assert response.json()["tools_used"] == ["fred_get_series"]
 
 
 def test_chat_insufficient_data_is_friendly(monkeypatch) -> None:

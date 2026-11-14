@@ -224,6 +224,7 @@ class TickerSearchResponse(BaseModel):
 class ChatResponse(BaseModel):
     reply: str
     valuation: ValuationResult | None = None
+    tools_used: list[str] = Field(default_factory=list)
 
 
 class ErrorResponse(BaseModel):

@@ -78,6 +78,32 @@ in search params so a valuation is linkable). The wizard's ticker box searches a
 ~10,400 SEC filers, with the 9 pilot tickers listed first by default; chat stays on the
 pilot allowlist.
 
+## Macro data (FRED MCP)
+
+The chat can query macro series — Treasury yields, CPI, GDP, unemployment — through the
+third-party [`fred-mcp-server`](https://github.com/stefanoamorelli/fred-mcp-server)
+(AGPL-3.0). It runs as a separate Node process over stdio; none of its code is imported
+or vendored into this repo.
+
+- **This app owns `FRED_API_KEY`.** `app/config.py` reads it from `.env` and forwards it
+  to the child process's environment, so the key has exactly one owner.
+- The server's own schemas (`fred_search`, `fred_browse`, `fred_get_series`) are turned
+  into OpenAI `tools` at runtime, so upstream tool changes need no code change here.
+- `app/llm.py` runs up to 4 tool rounds. `/api/chat` returns `tools_used`, so the UI can
+  show that a lookup actually happened.
+- If the server is missing or fails, the chat answers without tools instead of erroring.
+
+Launch note: `fred-mcp-server` 1.2.0 only boots when Node receives the **real** path of
+its entrypoint — its `isMainModule` guard compares `import.meta.url` with
+`process.argv[1]`, and `npx` puts a symlink on `PATH`, so plain `npx fred-mcp-server`
+exits silently. `app/services/fred_mcp.py` resolves the symlink before launching.
+
+```ini
+FRED_API_KEY=...                    # required — https://fredaccount.stlouisfed.org/apikeys
+FRED_MCP_ENABLED=true               # false = keep the chat LLM-only
+FRED_MCP_PACKAGE=fred-mcp-server    # pin if needed, e.g. fred-mcp-server@1.2.0
+```
+
 ## Layout
 
 ```
@@ -91,6 +117,7 @@ app/
     financials.py      tag mapping → raw annual rows
     dcf.py             pure FCFF/DCF math
     valuation.py       orchestration + WACC defaults
+    fred_mcp.py        MCP client for FRED macro tools (child process)
 frontend/              React 19 + Vite + Tailwind 4 + shadcn (Base UI/Mira)
 scripts/
   check_llm.py         provider smoke test
