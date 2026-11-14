@@ -120,10 +120,13 @@ Config is read through `pydantic-settings`; `.env.example` documents names only.
 25. FCFF panel: history, composition, SVG trend chart. **(done)**
 26. DCF panel: live sliders with a parity-tested TS mirror, model selector, grid. **(done)**
 27. WACC panel: CAPM inputs with source badges and overrides. **(done)**
+28. Ticker search over the full SEC universe (`/api/tickers`), pilots ranked first;
+    wizard accepts any SEC filer with a generic WACC fallback, EBIT reconstructed
+    from pretax + interest when `OperatingIncomeLoss` goes stale. **(done)**
 
 ### Phase 9 — Submission
 
-28. README, `assignments/day-36_capstone-kickoff/{README,VIDEO}.md`, PROGRESS 36–39,
+29. README, `assignments/day-36_capstone-kickoff/{README,VIDEO}.md`, PROGRESS 36–39,
     Feynman note, demo video.
 
 ## Anticipated blockers → unblock

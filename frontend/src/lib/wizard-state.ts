@@ -1,10 +1,9 @@
 import type { DcfOverrides } from "@/lib/api"
-import { SUPPORTED_TICKERS, type Ticker } from "@/lib/tickers"
 
 export type GrowthModel = "fade" | "constant"
 
 export type WizardSearch = {
-  ticker: Ticker
+  ticker: string
   years: number
   /** Terminal growth in percent, matching the slider range (1-5). */
   terminal: number
@@ -12,6 +11,8 @@ export type WizardSearch = {
   /** WACC override in percent; undefined means "use the engine default". */
   wacc?: number
 }
+
+const TICKER_PATTERN = /^[A-Z0-9.-]{1,10}$/
 
 export const DEFAULT_SEARCH: WizardSearch = {
   ticker: "KO",
@@ -39,10 +40,11 @@ function toNumber(value: unknown, fallback: number): number {
 export function validateWizardSearch(
   search: Record<string, unknown>,
 ): WizardSearch {
-  const rawTicker = String(search.ticker ?? DEFAULT_SEARCH.ticker).toUpperCase()
-  const ticker = (SUPPORTED_TICKERS as readonly string[]).includes(rawTicker)
-    ? (rawTicker as Ticker)
-    : DEFAULT_SEARCH.ticker
+  const rawTicker = String(search.ticker ?? DEFAULT_SEARCH.ticker)
+    .toUpperCase()
+    .trim()
+  // Any SEC symbol is allowed now; the pilot list is only the default view.
+  const ticker = TICKER_PATTERN.test(rawTicker) ? rawTicker : DEFAULT_SEARCH.ticker
 
   const model = search.model === "constant" ? "constant" : "fade"
 

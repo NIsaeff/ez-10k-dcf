@@ -21,7 +21,7 @@ def test_health() -> None:
 
 
 def test_analyze_supported_ticker(monkeypatch) -> None:
-    monkeypatch.setattr(valuation, "analyze", lambda ticker, overrides=None: KO_RESULT)
+    monkeypatch.setattr(valuation, "analyze", lambda ticker, overrides=None, **_: KO_RESULT)
     response = client.post("/api/analyze/ko")
     assert response.status_code == 200
     body = response.json()
@@ -36,7 +36,7 @@ def test_analyze_unsupported_ticker() -> None:
 
 
 def test_analyze_insufficient_data(monkeypatch) -> None:
-    def boom(ticker: str, overrides=None) -> None:
+    def boom(ticker: str, overrides=None, **_) -> None:
         raise InsufficientData(ticker, ["shares_outstanding"])
 
     monkeypatch.setattr(valuation, "analyze", boom)
@@ -48,7 +48,7 @@ def test_analyze_insufficient_data(monkeypatch) -> None:
 
 
 def test_chat_values_a_ticker(monkeypatch) -> None:
-    monkeypatch.setattr(valuation, "analyze", lambda ticker, overrides=None: KO_RESULT)
+    monkeypatch.setattr(valuation, "analyze", lambda ticker, overrides=None, **_: KO_RESULT)
     monkeypatch.setattr(
         "app.main.llm.narrate_valuation",
         lambda result: "KO is worth about $31.70 per share.",
@@ -74,7 +74,7 @@ def test_chat_plain_message_uses_llm(monkeypatch) -> None:
 
 
 def test_chat_insufficient_data_is_friendly(monkeypatch) -> None:
-    def boom(ticker: str, overrides=None) -> None:
+    def boom(ticker: str, overrides=None, **_) -> None:
         raise InsufficientData(ticker, ["cash_and_equivalents"])
 
     monkeypatch.setattr(valuation, "analyze", boom)
@@ -123,13 +123,13 @@ def test_missing_asset_is_not_html() -> None:
 
 from app.services import financials, market
 from app.services.market import MarketInputs
-from app.services.valuation import InvalidAssumptions
+from app.services.valuation import SUPPORTED_TICKERS, InvalidAssumptions
 
 
 def test_dcf_recalc_passes_overrides(monkeypatch) -> None:
     captured = {}
 
-    def fake_analyze(ticker, overrides=None):
+    def fake_analyze(ticker, overrides=None, **_):
         captured["ticker"] = ticker
         captured["overrides"] = overrides
         return KO_RESULT
@@ -149,7 +149,7 @@ def test_dcf_recalc_rejects_out_of_range_body() -> None:
 
 
 def test_dcf_recalc_maps_invalid_assumptions(monkeypatch) -> None:
-    def boom(ticker, overrides=None):
+    def boom(ticker, overrides=None, **_):
         raise InvalidAssumptions("WACC must be greater than terminal growth")
 
     monkeypatch.setattr(valuation, "analyze", boom)
@@ -162,7 +162,7 @@ def test_dcf_recalc_maps_invalid_assumptions(monkeypatch) -> None:
 
 
 def test_sensitivity_endpoint_returns_grid(monkeypatch) -> None:
-    monkeypatch.setattr(valuation, "analyze", lambda ticker, overrides=None: KO_RESULT)
+    monkeypatch.setattr(valuation, "analyze", lambda ticker, overrides=None, **_: KO_RESULT)
     response = client.post(
         "/api/dcf/KO/sensitivity", json={"wacc_steps": 3, "growth_steps": 3}
     )
@@ -207,3 +207,25 @@ def test_wacc_endpoint_rejects_unsupported_ticker() -> None:
     response = client.get("/api/wacc/ZZZ")
     assert response.status_code == 422
     assert response.json()["error"] == "unsupported_ticker"
+
+
+def test_ticker_search_returns_match() -> None:
+    response = client.get("/api/tickers", params={"q": "KO", "limit": 5})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["results"][0]["ticker"] == "KO"
+    assert body["results"][0]["pilot"] is True
+
+
+def test_ticker_search_defaults_to_pilots() -> None:
+    response = client.get("/api/tickers")
+    assert response.status_code == 200
+    body = response.json()
+    assert {row["ticker"] for row in body["results"]} == set(SUPPORTED_TICKERS)
+
+
+def test_ticker_search_finds_non_pilot() -> None:
+    response = client.get("/api/tickers", params={"q": "johnson", "limit": 5})
+    assert response.status_code == 200
+    rows = response.json()["results"]
+    assert any(row["ticker"] == "JNJ" and row["pilot"] is False for row in rows)

@@ -62,6 +62,52 @@ def company_info(ticker: str) -> dict[str, Any]:
     return info
 
 
+def search_tickers(
+    query: str = "",
+    *,
+    limit: int = 20,
+    pilots: tuple[str, ...] | list[str] = (),
+) -> list[dict[str, Any]]:
+    """Search the SEC ticker universe.
+
+    An empty query returns the pilot list only. Otherwise matches on ticker
+    prefix or company name, with pilot tickers ranked first.
+    """
+    text = query.strip().upper()
+    pilot_set = {str(ticker).upper() for ticker in pilots}
+    matches: list[tuple[tuple[int, int, str], dict[str, Any]]] = []
+
+    for ticker, info in ticker_map().items():
+        name = str(info["title"])
+        if text:
+            if ticker.startswith(text):
+                match_rank = 0
+            elif text in name.upper():
+                match_rank = 1
+            else:
+                continue
+        else:
+            if ticker not in pilot_set:
+                continue
+            match_rank = 0
+
+        matches.append(
+            (
+                (0 if ticker in pilot_set else 1, match_rank, ticker),
+                {
+                    "ticker": ticker,
+                    "name": name,
+                    "cik": f"{int(info['cik']):010d}",
+                    "pilot": ticker in pilot_set,
+                },
+            )
+        )
+
+    matches.sort(key=lambda item: item[0])
+    return [row for _key, row in matches[: max(1, limit)]]
+
+
+
 def submissions(cik: int) -> dict[str, Any]:
     return _get_json(SUBMISSIONS_URL.format(cik=cik), f"submissions_{cik:010d}.json")
 

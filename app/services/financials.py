@@ -145,6 +145,21 @@ def _share_series(
     return "missing", {}, {}
 
 
+def _merged_annual_series(
+    gaap: dict[str, Any], tags: list[str], unit: str = "USD"
+) -> dict[int, float]:
+    """Merge complementary tags by year, earlier tags winning on overlap.
+
+    Some filers switch taxonomy eras mid-history (e.g. InterestExpense until
+    2023, InterestExpenseNonoperating after). Picking one tag loses years.
+    """
+    merged: dict[int, float] = {}
+    for tag in tags:
+        for year, value in edgar.annual_series(gaap, tag, unit).items():
+            merged.setdefault(year, value)
+    return merged
+
+
 def _fact_rows(
     *,
     cik: str,
@@ -267,6 +282,22 @@ def build_from_facts(
         if not facts and metric == "revenue":
             flags.append("revenue_missing")
 
+    # Some filers stop tagging OperatingIncomeLoss while still reporting pretax
+    # income and interest expense. Reconstruct EBIT for the missing years
+    # (EBIT = pretax + interest) and say so via the flag and provenance tag.
+    derived_ebit: dict[int, float] = {}
+    da_years = series["depreciation_amortization"]
+    if da_years and (not series["ebit"] or max(series["ebit"]) < max(da_years)):
+        pretax = _merged_annual_series(gaap, METRIC_TAGS["pretax_income"])
+        interest = _merged_annual_series(gaap, METRIC_TAGS["interest_expense"])
+        for year in sorted(set(pretax) & set(interest)):
+            if year in series["ebit"]:
+                continue
+            series["ebit"][year] = pretax[year] + interest[year]
+            derived_ebit[year] = pretax[year] + interest[year]
+        if derived_ebit:
+            flags.append("ebit_derived")
+
     debt, debt_components = _debt_series(gaap, flags)
     share_source, shares, share_facts = _share_series(gaap, dei)
 
@@ -333,6 +364,24 @@ def build_from_facts(
         years=years,
         latest_year=latest_year,
     )
+
+    if derived_ebit:
+        index_url = edgar.filing_index_url(cik, filing.accession_number)
+        for year, value in sorted(derived_ebit.items()):
+            source_facts.append(
+                {
+                    "metric": "ebit",
+                    "tag": "derived:pretax_income+interest_expense",
+                    "fiscal_year": int(year),
+                    "value": float(value),
+                    "unit": "USD",
+                    "end": None,
+                    "filed": filing.filed,
+                    "form": filing.form,
+                    "accession_number": filing.accession_number,
+                    "url": index_url,
+                }
+            )
 
     return CompanyFinancials(
         ticker=ticker,

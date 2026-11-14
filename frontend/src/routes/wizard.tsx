@@ -6,7 +6,7 @@ import { SidebarTrigger } from "@/components/ui/sidebar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { DcfPanel } from "@/components/wizard/DcfPanel"
 import { FcffPanel } from "@/components/wizard/FcffPanel"
-import { TickerBar } from "@/components/wizard/TickerBar"
+import { TickerSearch } from "@/components/wizard/TickerSearch"
 import { WaccPanel } from "@/components/wizard/WaccPanel"
 import {
   fetchSensitivity,
@@ -124,10 +124,9 @@ function WizardPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <TickerBar
+          <TickerSearch
             ticker={ticker}
-            disabled={pending}
-            onChange={(next) => update({ ticker: next })}
+            onSelect={(next) => update({ ticker: next })}
           />
           <ModeToggle />
         </div>

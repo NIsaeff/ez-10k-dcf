@@ -168,6 +168,19 @@ class ValuationResult(BaseModel):
     disclaimer: str
 
 
+class TickerSuggestion(BaseModel):
+    ticker: str
+    name: str
+    cik: str
+    pilot: bool
+
+
+class TickerSearchResponse(BaseModel):
+    query: str
+    results: list[TickerSuggestion]
+    total: int
+
+
 class ChatResponse(BaseModel):
     reply: str
     valuation: ValuationResult | None = None

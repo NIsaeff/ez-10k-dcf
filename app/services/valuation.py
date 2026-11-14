@@ -40,6 +40,9 @@ WACC_DEFAULTS = {
     "TSLA": 0.100,
 }
 
+# Fallback for tickers outside the pilot list (wizard accepts any SEC filer).
+GENERIC_WACC = 0.09
+
 TERMINAL_GROWTH = 0.025
 PROJECTION_YEARS = 5
 DISCLAIMER = "Illustrative valuation for a class project. Not investment advice."
@@ -60,11 +63,24 @@ class InvalidAssumptions(Exception):
 def analyze(
     ticker: str,
     overrides: DcfOverrides | None = None,
+    *,
+    allow_any: bool = False,
 ) -> ValuationResult:
+    """Value a ticker.
+
+    ``allow_any`` lets the wizard value any ticker SEC knows about; the chat
+    keeps the small pilot allowlist so replies stay predictable.
+    """
     ticker = ticker.upper().strip()
-    if ticker not in SUPPORTED_TICKERS:
+    if not allow_any and ticker not in SUPPORTED_TICKERS:
         raise UnsupportedTicker(ticker)
-    return analyze_from_company(financials.load_company(ticker), overrides)
+
+    try:
+        company = financials.load_company(ticker)
+    except KeyError as exc:
+        raise UnsupportedTicker(ticker) from exc
+
+    return analyze_from_company(company, overrides)
 
 
 def analyze_from_company(
@@ -72,8 +88,6 @@ def analyze_from_company(
     overrides: DcfOverrides | None = None,
 ) -> ValuationResult:
     ticker = company.ticker
-    if ticker not in SUPPORTED_TICKERS:
-        raise UnsupportedTicker(ticker)
 
     history, history_flags = dcf.build_history(company.raw_years)
     if not history:
@@ -95,7 +109,7 @@ def analyze_from_company(
     years = PROJECTION_YEARS
     terminal_growth = TERMINAL_GROWTH
     growth_model = "fade"
-    wacc = WACC_DEFAULTS[ticker]
+    wacc = WACC_DEFAULTS.get(ticker, GENERIC_WACC)
     wacc_source = "manual_default"
     applied: list[str] = []
 
@@ -153,6 +167,7 @@ def analyze_from_company(
                 *base_flags,
                 *valuation_flags,
                 *([] if wacc_source == "override" else ["wacc_manual_default"]),
+                *([] if ticker in WACC_DEFAULTS else ["wacc_generic_default"]),
             ]
         )
     )
@@ -180,7 +195,7 @@ def analyze_from_company(
         terminal_growth_rate=terminal_growth,
         projection_years=years,
         wacc=wacc,
-        base_wacc=WACC_DEFAULTS[ticker],
+        base_wacc=WACC_DEFAULTS.get(ticker, GENERIC_WACC),
         total_debt=company.total_debt,
         cash=company.cash_and_equivalents,
         shares_outstanding=company.shares_outstanding,

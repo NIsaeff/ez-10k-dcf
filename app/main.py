@@ -15,10 +15,12 @@ from app.schemas import (
     HealthResponse,
     SensitivityGrid,
     SensitivityRequest,
+    TickerSearchResponse,
+    TickerSuggestion,
     ValuationResult,
     WaccBreakdown,
 )
-from app.services import dcf, financials, market, valuation, wacc
+from app.services import dcf, edgar, financials, market, valuation, wacc
 from app.services.financials import InsufficientData
 from app.services.valuation import (
     SUPPORTED_TICKERS,
@@ -59,10 +61,12 @@ def health() -> HealthResponse:
 def _valuation_or_error(
     ticker: str,
     overrides: DcfOverrides | None = None,
+    *,
+    allow_any: bool = False,
 ) -> ValuationResult | JSONResponse:
     """Map engine failures onto the documented error envelope."""
     try:
-        return valuation.analyze(ticker, overrides)
+        return valuation.analyze(ticker, overrides, allow_any=allow_any)
     except UnsupportedTicker:
         return JSONResponse(
             status_code=422,
@@ -101,6 +105,18 @@ def _valuation_or_error(
         )
 
 
+@app.get("/api/tickers", response_model=TickerSearchResponse)
+def tickers(q: str = "", limit: int = 20):
+    """Search the SEC ticker universe. Empty query returns the pilot list."""
+    bounded = max(1, min(limit, 50))
+    results = edgar.search_tickers(q, limit=bounded, pilots=SUPPORTED_TICKERS)
+    return TickerSearchResponse(
+        query=q,
+        results=[TickerSuggestion(**row) for row in results],
+        total=len(results),
+    )
+
+
 @app.post("/api/analyze/{ticker}", response_model=ValuationResult)
 def analyze_ticker(ticker: str):
     return _valuation_or_error(ticker)
@@ -109,13 +125,13 @@ def analyze_ticker(ticker: str):
 @app.post("/api/dcf/{ticker}", response_model=ValuationResult)
 def dcf_recalculate(ticker: str, overrides: DcfOverrides | None = None):
     """Re-run the engine with assumption overrides (wizard recalc)."""
-    return _valuation_or_error(ticker, overrides)
+    return _valuation_or_error(ticker, overrides, allow_any=True)
 
 
 @app.post("/api/dcf/{ticker}/sensitivity", response_model=SensitivityGrid)
 def dcf_sensitivity(ticker: str, request: SensitivityRequest | None = None):
     payload = request or SensitivityRequest()
-    result = _valuation_or_error(ticker, payload)
+    result = _valuation_or_error(ticker, payload, allow_any=True)
     if not isinstance(result, ValuationResult):
         return result
     if result.engine is None:
@@ -156,18 +172,18 @@ def dcf_sensitivity(ticker: str, request: SensitivityRequest | None = None):
 @app.get("/api/wacc/{ticker}", response_model=WaccBreakdown)
 def wacc_breakdown(ticker: str):
     ticker = ticker.upper().strip()
-    if ticker not in SUPPORTED_TICKERS:
+
+    try:
+        company = financials.load_company(ticker)
+    except KeyError:
         return JSONResponse(
             status_code=422,
             content=ErrorResponse(
                 error="unsupported_ticker",
                 ticker=ticker,
-                detail=f"Supported tickers: {', '.join(SUPPORTED_TICKERS)}",
+                detail="Ticker not found in SEC company_tickers.json",
             ).model_dump(),
         )
-
-    try:
-        company = financials.load_company(ticker)
     except InsufficientData as exc:
         return JSONResponse(
             status_code=422,
@@ -190,7 +206,7 @@ def wacc_breakdown(ticker: str):
     return wacc.build_wacc(
         company,
         market.market_inputs(ticker),
-        fallback_wacc=WACC_DEFAULTS[ticker],
+        fallback_wacc=WACC_DEFAULTS.get(ticker, valuation.GENERIC_WACC),
     )
 
 

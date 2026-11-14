@@ -68,12 +68,15 @@ React chat (Vite) ──/api/chat──▶ FastAPI
 | `POST /api/dcf/{ticker}` | Recalculate with assumption overrides |
 | `POST /api/dcf/{ticker}/sensitivity` | WACC × terminal-growth grid |
 | `GET /api/wacc/{ticker}` | CAPM/WACC decomposition with per-input sources |
+| `GET /api/tickers?q=` | Ticker search over SEC's universe, pilots ranked first |
 | `POST /api/chat` | `{messages}` → `{reply, valuation}`; detects allowlisted tickers |
 | `GET /api/health` | status, model, supported tickers |
 | `GET /docs` | Swagger UI |
 
 Routes: `/` is the chat, `/wizard` is the DCF Wizard (FCFF, WACC, DCF tabs; state lives
-in search params so a valuation is linkable).
+in search params so a valuation is linkable). The wizard's ticker box searches all
+~10,400 SEC filers, with the 9 pilot tickers listed first by default; chat stays on the
+pilot allowlist.
 
 ## Layout
 

@@ -18,6 +18,19 @@ export type SensitivityGrid = {
   base_terminal_growth: number
 }
 
+export type TickerSuggestion = {
+  ticker: string
+  name: string
+  cik: string
+  pilot: boolean
+}
+
+export type TickerSearchResponse = {
+  query: string
+  results: TickerSuggestion[]
+  total: number
+}
+
 export type WaccInput = {
   key: string
   label: string
@@ -99,6 +112,14 @@ export function fetchSensitivity(
     `/api/dcf/${encodeURIComponent(ticker)}/sensitivity`,
     overrides,
   )
+}
+
+export function searchTickers(
+  query: string,
+  limit = 20,
+): Promise<TickerSearchResponse> {
+  const params = new URLSearchParams({ q: query, limit: String(limit) })
+  return request<TickerSearchResponse>(`/api/tickers?${params.toString()}`)
 }
 
 export function fetchWacc(ticker: string): Promise<WaccBreakdown> {
