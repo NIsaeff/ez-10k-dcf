@@ -130,6 +130,20 @@ FRED_MCP_PACKAGE=fred-mcp-server    # pin if needed, e.g. fred-mcp-server@1.2.0
 FRED_MCP_TRANSPORT=http             # stdio = spawn per call (no shared cache)
 ```
 
+### Engine inputs (deterministic)
+
+`app/services/macro.py` is the other FRED path — plain HTTPS, not MCP — for numbers
+the engine consumes rather than text the model writes:
+
+- `DGS10` supplies the CAPM risk-free rate. `/api/wacc` labels it
+  `fred: DGS10 <observation date>`, and Yahoo `^TNX` is only the fallback when FRED is
+  unavailable or the observation is stale (stale FRED still beats nothing).
+- Every `ValuationResult` carries a `macro` snapshot — `complete` / `degraded` /
+  `absent` — with `as_of`, per-series value/units/date/url, and flags such as
+  `macro_real_gdp_stale`. `absent` is stated, never implied.
+- Cache: `data/raw/fred/<series>.json`, 6h TTL, stale-served when a refresh fails.
+- Freshness bounds per series: dailies 7 days, monthlies 45, quarterly GDP 180.
+
 ## Layout
 
 ```

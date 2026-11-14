@@ -89,7 +89,7 @@ def build_wacc(
                     "risk_free_rate",
                     "Risk-free rate",
                     risk_free,
-                    "yahoo: ^TNX 10y close" if risk_free is not None else "unavailable",
+                    market.risk_free_source or "unavailable",
                 ),
                 _input("beta", "Beta", beta, beta_source, beta_detail),
                 erp_input,
@@ -143,7 +143,7 @@ def build_wacc(
 
     inputs.extend(
         [
-            _input("risk_free_rate", "Risk-free rate", risk_free, "yahoo: ^TNX 10y close"),
+            _input("risk_free_rate", "Risk-free rate", risk_free, market.risk_free_source or "unknown"),
             _input("beta", "Beta", beta, beta_source, beta_detail),
             erp_input,
             _input(

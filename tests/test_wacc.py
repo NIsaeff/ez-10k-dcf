@@ -17,6 +17,7 @@ def _market(**overrides) -> MarketInputs:
         "beta_observations": 104,
         "beta_r_squared": 0.35,
         "risk_free_rate": 0.042,
+        "risk_free_source": "yahoo: ^TNX 10y close",
         "as_of": "2026-11-11",
         "available": True,
     }
