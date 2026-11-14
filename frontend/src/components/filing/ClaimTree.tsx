@@ -246,20 +246,37 @@ function ClaimBranch({
   claim,
   depth,
   handlers,
+  expandSignal,
+  collapseSignal,
 }: {
   claim: FilingClaim
   depth: number
   handlers: Handlers
+  expandSignal: number
+  collapseSignal: number
 }) {
   const [editing, setEditing] = useState(false)
+  const [open, setOpen] = useState(depth === 0)
   const hasChildren = claim.children.length > 0
+
+  useEffect(() => {
+    if (expandSignal > 0) setOpen(true)
+  }, [expandSignal])
+
+  useEffect(() => {
+    if (collapseSignal > 0) setOpen(false)
+  }, [collapseSignal])
 
   if (!hasChildren) {
     return <ClaimCard claim={claim} handlers={handlers} />
   }
 
   return (
-    <details open={depth === 0} className="group/claim">
+    <details
+      open={open}
+      onToggle={(event) => setOpen(event.currentTarget.open)}
+      className="group/claim"
+    >
       <summary className="flex cursor-pointer list-none items-center gap-2 rounded-md px-1 py-1.5 text-xs hover:bg-muted/40">
         <span className="w-2 shrink-0 text-muted-foreground transition-transform group-open/claim:rotate-90">
           ▸
@@ -297,7 +314,14 @@ function ClaimBranch({
           </button>
         ) : null}
         {claim.children.map((child) => (
-          <ClaimBranch key={child.id} claim={child} depth={depth + 1} handlers={handlers} />
+          <ClaimBranch
+            key={child.id}
+            claim={child}
+            depth={depth + 1}
+            handlers={handlers}
+            expandSignal={expandSignal}
+            collapseSignal={collapseSignal}
+          />
         ))}
       </div>
     </details>
@@ -308,6 +332,8 @@ export function ClaimTree({
   claims,
   activeId,
   overrides,
+  expandSignal,
+  collapseSignal,
   onJump,
   onSave,
   onReset,
@@ -315,6 +341,8 @@ export function ClaimTree({
   claims: FilingClaim[]
   activeId: string | null
   overrides: Record<string, string>
+  expandSignal: number
+  collapseSignal: number
   onJump: (claim: FilingClaim) => void
   onSave: (claim: FilingClaim, statement: string) => void
   onReset: (claim: FilingClaim) => void
@@ -339,7 +367,14 @@ export function ClaimTree({
   return (
     <div className="space-y-2">
       {claims.map((claim) => (
-        <ClaimBranch key={claim.id} claim={claim} depth={0} handlers={handlers} />
+        <ClaimBranch
+          key={claim.id}
+          claim={claim}
+          depth={0}
+          handlers={handlers}
+          expandSignal={expandSignal}
+          collapseSignal={collapseSignal}
+        />
       ))}
     </div>
   )

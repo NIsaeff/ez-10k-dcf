@@ -1,3 +1,5 @@
+import { UnfoldLessIcon, UnfoldMoreIcon } from "@hugeicons/core-free-icons"
+import { HugeiconsIcon } from "@hugeicons/react"
 import { createFileRoute } from "@tanstack/react-router"
 import { useEffect, useState } from "react"
 
@@ -26,6 +28,8 @@ function FilingPage() {
   const [active, setActive] = useState<FilingClaim | null>(null)
   const [elapsed, setElapsed] = useState(0)
   const [overrides, setOverrides] = useState<Record<string, string>>({})
+  const [expandSignal, setExpandSignal] = useState(0)
+  const [collapseSignal, setCollapseSignal] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -67,6 +71,8 @@ function FilingPage() {
       setOverrides({})
       return
     }
+    setExpandSignal(0)
+    setCollapseSignal(0)
     try {
       const stored = localStorage.getItem(`ez10k-claim-overrides:${data.accession}`)
       setOverrides(
@@ -175,23 +181,41 @@ function FilingPage() {
               ) : null}
             </div>
 
-            {data.flags.length > 0 ? (
-              <div className="mb-3 flex flex-wrap gap-1.5">
-                {data.flags.map((flag) => (
-                  <span
-                    key={flag}
-                    className="rounded-full border border-border/60 bg-muted/40 px-1.5 py-0.5 text-[9px] text-muted-foreground"
-                  >
-                    {flag}
-                  </span>
-                ))}
+            <div className="mb-3 flex flex-wrap items-center gap-1.5">
+              {data.flags.map((flag) => (
+                <span
+                  key={flag}
+                  className="rounded-full border border-border/60 bg-muted/40 px-1.5 py-0.5 text-[9px] text-muted-foreground"
+                >
+                  {flag}
+                </span>
+              ))}
+              <div className="ml-auto flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setCollapseSignal((value) => value + 1)}
+                  className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-0.5 text-[10px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                >
+                  <HugeiconsIcon icon={UnfoldLessIcon} strokeWidth={2} className="size-3" />
+                  Collapse all
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setExpandSignal((value) => value + 1)}
+                  className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-0.5 text-[10px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                >
+                  <HugeiconsIcon icon={UnfoldMoreIcon} strokeWidth={2} className="size-3" />
+                  Expand all
+                </button>
               </div>
-            ) : null}
+            </div>
 
             <ClaimTree
               claims={claims}
               activeId={active?.id ?? null}
               overrides={overrides}
+              expandSignal={expandSignal}
+              collapseSignal={collapseSignal}
               onJump={jumpToClaim}
               onSave={saveOverride}
               onReset={resetOverride}
