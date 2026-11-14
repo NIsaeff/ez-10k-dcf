@@ -28,16 +28,28 @@ cp .env.example .env
 #   SEC_USER_AGENT="EZ-10k Capstone (you@example.com)"
 
 # 4. Run
-uv run fastapi dev app/main.py
-# open http://localhost:8000 and type: value KO
+./scripts/dev-backend.sh
+# open http://localhost:8001 and type: value KO
 ```
 
-Frontend-only dev loop (HMR on :5173, proxy to :8000):
+Frontend-only dev loop (HMR on the port in `.env`, proxy to the API port):
 
 ```bash
-uv run fastapi dev app/main.py     # terminal 1
-cd frontend && bun run dev         # terminal 2
+./scripts/dev-backend.sh      # terminal 1 — API, port from PORT in .env
+cd frontend && bun run dev    # terminal 2 — UI, port from FRONTEND_PORT
 ```
+
+Ports are declared once in `.env`, so several worktrees can run side by side:
+
+```ini
+PORT=8001            # read directly by `fastapi dev` (its --port envvar)
+FRONTEND_PORT=5174   # read by vite.config.ts; strict, so a clash fails loudly
+```
+
+`uv run` does not read `.env` and `fastapi dev` resolves its port before any app
+code runs, so the wrapper just adds `--env-file .env`. The equivalent raw command is
+`uv run --env-file .env fastapi dev app/main.py`; the frontend needs no flag.
+`set -a; . ./.env; set +a` in a shell also makes the raw commands work.
 
 ## How it works
 
