@@ -135,6 +135,7 @@ def latest_10k(cik: int) -> dict[str, Any]:
         document = recent["primaryDocument"][index]
         return {
             "accession_number": accession,
+            "document": document,
             "form": "10-K",
             "fiscal_year_end": recent["reportDate"][index],
             "filed": recent["filingDate"][index],

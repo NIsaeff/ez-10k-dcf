@@ -7,6 +7,7 @@ dependencies = [
     "fastapi[standard]>=0.141.0",
     "openai>=3.49.0",
     "pydantic-settings>=2.16.2",
+    "selectolax>=1.0.2",
 ]
 
 [tool.uv]

@@ -121,7 +121,7 @@ def test_missing_asset_is_not_html() -> None:
 
 # --- DCF wizard endpoints ---------------------------------------------------
 
-from app.services import financials, market
+from app.services import edgar, financials, market
 from app.services.market import MarketInputs
 from app.services.valuation import SUPPORTED_TICKERS, InvalidAssumptions
 
@@ -229,3 +229,90 @@ def test_ticker_search_finds_non_pilot() -> None:
     assert response.status_code == 200
     rows = response.json()["results"]
     assert any(row["ticker"] == "JNJ" and row["pilot"] is False for row in rows)
+
+
+# --- Filing analysis --------------------------------------------------------
+
+from app.services import claims as claims_service
+from app.services import filing as filing_service
+
+
+def test_filing_endpoint_returns_tree(monkeypatch) -> None:
+    parsed = filing_service.parse(
+        "<html><body>"
+        "<div><span>ITEM 7. MD&amp;A</span></div>"
+        "<p>Operating income increased 12%.</p>"
+        "</body></html>"
+    )
+    monkeypatch.setattr(edgar, "company_info", lambda ticker: {"cik": 21344, "title": "COCA COLA CO"})
+    monkeypatch.setattr(
+        edgar,
+        "latest_10k",
+        lambda cik: {
+            "accession_number": "0000021344-25-000011",
+            "document": "ko.htm",
+            "form": "10-K",
+            "fiscal_year_end": "2025-12-31",
+            "filed": "2026-02-20",
+            "url": "https://www.sec.gov/Archives/edgar/data/21344/x/ko.htm",
+        },
+    )
+    monkeypatch.setattr(filing_service, "load", lambda cik, accession, document: parsed)
+    monkeypatch.setattr(filing_service, "load_cached_claims", lambda accession: None)
+    monkeypatch.setattr(filing_service, "save_cached_claims", lambda accession, payload: None)
+    monkeypatch.setattr(
+        claims_service,
+        "extract",
+        lambda parsed_filing: (
+            [
+                {
+                    "id": "p1",
+                    "statement": "Operating income grew",
+                    "kind": "segment",
+                    "quote": None,
+                    "section": "Item 7",
+                    "block": None,
+                    "start": None,
+                    "end": None,
+                    "verified": False,
+                    "confidence": None,
+                    "children": [
+                        {
+                            "id": "p1-c1",
+                            "statement": "Operating income +12%",
+                            "kind": None,
+                            "quote": "Operating income increased 12%.",
+                            "section": "Item 7",
+                            "block": 1,
+                            "start": 0,
+                            "end": 31,
+                            "verified": True,
+                            "confidence": "high",
+                            "children": [],
+                        }
+                    ],
+                }
+            ],
+            [],
+        ),
+    )
+
+    response = client.get("/api/filing/KO")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["ticker"] == "KO"
+    assert body["claims"][0]["children"][0]["verified"] is True
+    assert body["blocks"]
+    assert body["sections"][0]["id"] == "Preamble"
+
+
+def test_filing_endpoint_rejects_unknown_ticker(monkeypatch) -> None:
+    def boom(ticker: str):
+        raise KeyError(ticker)
+
+    monkeypatch.setattr(edgar, "company_info", boom)
+    response = client.get("/api/filing/ZZZZ")
+
+    assert response.status_code == 422
+    assert response.json()["error"] == "unsupported_ticker"

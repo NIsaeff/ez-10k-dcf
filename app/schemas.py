@@ -168,6 +168,46 @@ class ValuationResult(BaseModel):
     disclaimer: str
 
 
+class FilingBlock(BaseModel):
+    index: int
+    section: str
+    text: str
+
+
+class FilingSection(BaseModel):
+    id: str
+    label: str
+    block: int
+
+
+class ClaimNode(BaseModel):
+    id: str
+    statement: str
+    kind: str | None = None
+    quote: str | None = None
+    section: str | None = None
+    block: int | None = None
+    start: int | None = None
+    end: int | None = None
+    verified: bool = False
+    confidence: str | None = None
+    children: list["ClaimNode"] = Field(default_factory=list)
+
+
+class FilingAnalysis(BaseModel):
+    ticker: str
+    company_name: str
+    accession: str
+    document_url: str
+    filed: str
+    fiscal_year_end: str
+    sections: list[FilingSection]
+    claims: list[ClaimNode]
+    blocks: list[FilingBlock]
+    flags: list[str] = Field(default_factory=list)
+    cached: bool = False
+
+
 class TickerSuggestion(BaseModel):
     ticker: str
     name: str
@@ -199,3 +239,6 @@ class HealthResponse(BaseModel):
     llm_configured: bool
     supported_tickers: list[str]
     extra: dict[str, Any] | None = None
+
+
+ClaimNode.model_rebuild()

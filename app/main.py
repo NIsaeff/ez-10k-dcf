@@ -10,8 +10,12 @@ from app.config import settings
 from app.schemas import (
     ChatRequest,
     ChatResponse,
+    ClaimNode,
     DcfOverrides,
     ErrorResponse,
+    FilingAnalysis,
+    FilingBlock,
+    FilingSection,
     HealthResponse,
     SensitivityGrid,
     SensitivityRequest,
@@ -20,7 +24,20 @@ from app.schemas import (
     ValuationResult,
     WaccBreakdown,
 )
-from app.services import dcf, edgar, financials, market, valuation, wacc
+from app.services import (
+    claims as claims_service,
+)
+from app.services import (
+    dcf,
+    edgar,
+    financials,
+    market,
+    valuation,
+    wacc,
+)
+from app.services import (
+    filing as filing_service,
+)
 from app.services.financials import InsufficientData
 from app.services.valuation import (
     SUPPORTED_TICKERS,
@@ -103,6 +120,74 @@ def _valuation_or_error(
                 detail=f"{type(exc).__name__}: {exc}",
             ).model_dump(),
         )
+
+
+@app.get("/api/filing/{ticker}", response_model=FilingAnalysis)
+def filing_analysis(ticker: str):
+    """Parse the latest 10-K into blocks plus a hierarchy of cited claims."""
+    ticker = ticker.upper().strip()
+    try:
+        info = edgar.company_info(ticker)
+    except KeyError:
+        return JSONResponse(
+            status_code=422,
+            content=ErrorResponse(
+                error="unsupported_ticker",
+                ticker=ticker,
+                detail="Ticker not found in SEC company_tickers.json",
+            ).model_dump(),
+        )
+
+    cik = f"{int(info['cik']):010d}"
+    try:
+        meta = edgar.latest_10k(int(info["cik"]))
+        parsed = filing_service.load(cik, meta["accession_number"], meta["document"])
+    except ValueError as exc:
+        return JSONResponse(
+            status_code=422,
+            content=ErrorResponse(
+                error="no_annual_report",
+                ticker=ticker,
+                detail=str(exc),
+            ).model_dump(),
+        )
+    except Exception as exc:  # noqa: BLE001 - upstream failure envelope
+        return JSONResponse(
+            status_code=502,
+            content=ErrorResponse(
+                error="upstream_error",
+                ticker=ticker,
+                detail=f"{type(exc).__name__}: {exc}",
+            ).model_dump(),
+        )
+
+    cached = filing_service.load_cached_claims(meta["accession_number"])
+    if cached and cached.get("version") == claims_service.PROMPT_VERSION:
+        claim_dicts = cached.get("claims", [])
+        flags = list(cached.get("flags", [])) + ["claims_cached"]
+    else:
+        claim_dicts, flags = claims_service.extract(parsed)
+        filing_service.save_cached_claims(
+            meta["accession_number"],
+            claims_service.cache_payload(claim_dicts, flags),
+        )
+
+    return FilingAnalysis(
+        ticker=ticker,
+        company_name=str(info["title"]),
+        accession=meta["accession_number"],
+        document_url=meta["url"],
+        filed=meta["filed"],
+        fiscal_year_end=meta["fiscal_year_end"],
+        sections=[FilingSection(**section) for section in parsed.sections],
+        claims=[ClaimNode(**claim) for claim in claim_dicts],
+        blocks=[
+            FilingBlock(index=block.index, section=block.section, text=block.text)
+            for block in parsed.blocks
+        ],
+        flags=flags,
+        cached=bool(cached),
+    )
 
 
 @app.get("/api/tickers", response_model=TickerSearchResponse)
