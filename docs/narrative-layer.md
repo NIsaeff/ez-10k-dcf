@@ -1,6 +1,6 @@
 # Narrative layer — using the 10-K prose
 
-Status: recommendations captured 2026-11-14; P0 in build.
+Status: recommendations captured 2026-11-14; P0 shipped 2026-11-14 (`/filing`).
 Scope: everything *interpretive* about a filing, kept separate from the
 deterministic valuation engine.
 
@@ -30,7 +30,7 @@ evidence*, and the user applies it.
 
 ## Recommendations
 
-### P0 — Claim ledger with verbatim citations *(in build)*
+### P0 — Claim ledger with verbatim citations *(shipped)*
 
 Fetch the primary document, segment by Item (1, 1A, 7, 7A, 8), extract atomic
 claims as a hierarchy: thematic parent claims supported by specific child claims,

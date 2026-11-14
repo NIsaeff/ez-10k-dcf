@@ -14,6 +14,14 @@ export type WizardSearch = {
 
 const TICKER_PATTERN = /^[A-Z0-9.-]{1,10}$/
 
+/** Any SEC symbol is allowed; the pilot list is only a default view. */
+export function normalizeTicker(value: unknown, fallback = "KO"): string {
+  const candidate = String(value ?? fallback)
+    .toUpperCase()
+    .trim()
+  return TICKER_PATTERN.test(candidate) ? candidate : fallback
+}
+
 export const DEFAULT_SEARCH: WizardSearch = {
   ticker: "KO",
   years: 5,
@@ -40,11 +48,7 @@ function toNumber(value: unknown, fallback: number): number {
 export function validateWizardSearch(
   search: Record<string, unknown>,
 ): WizardSearch {
-  const rawTicker = String(search.ticker ?? DEFAULT_SEARCH.ticker)
-    .toUpperCase()
-    .trim()
-  // Any SEC symbol is allowed now; the pilot list is only the default view.
-  const ticker = TICKER_PATTERN.test(rawTicker) ? rawTicker : DEFAULT_SEARCH.ticker
+  const ticker = normalizeTicker(search.ticker, DEFAULT_SEARCH.ticker)
 
   const model = search.model === "constant" ? "constant" : "fade"
 

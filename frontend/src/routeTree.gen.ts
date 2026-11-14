@@ -10,11 +10,17 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as FilingRouteImport } from './routes/filing'
 import { Route as WizardRouteImport } from './routes/wizard'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FilingRoute = FilingRouteImport.update({
+  id: '/filing',
+  path: '/filing',
   getParentRoute: () => rootRouteImport,
 } as any)
 const WizardRoute = WizardRouteImport.update({
@@ -25,27 +31,31 @@ const WizardRoute = WizardRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/filing': typeof FilingRoute
   '/wizard': typeof WizardRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/filing': typeof FilingRoute
   '/wizard': typeof WizardRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/filing': typeof FilingRoute
   '/wizard': typeof WizardRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/wizard'
+  fullPaths: '/' | '/filing' | '/wizard'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/wizard'
-  id: '__root__' | '/' | '/wizard'
+  to: '/' | '/filing' | '/wizard'
+  id: '__root__' | '/' | '/filing' | '/wizard'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  FilingRoute: typeof FilingRoute
   WizardRoute: typeof WizardRoute
 }
 
@@ -56,6 +66,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/filing': {
+      id: '/filing'
+      path: '/filing'
+      fullPath: '/filing'
+      preLoaderRoute: typeof FilingRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/wizard': {
@@ -70,6 +87,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  FilingRoute: FilingRoute,
   WizardRoute: WizardRoute,
 }
 export const routeTree = rootRouteImport

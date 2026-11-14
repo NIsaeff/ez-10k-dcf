@@ -31,6 +31,46 @@ export type TickerSearchResponse = {
   total: number
 }
 
+export type FilingBlock = {
+  index: number
+  section: string
+  text: string
+}
+
+export type FilingSection = {
+  id: string
+  label: string
+  block: number
+}
+
+export type FilingClaim = {
+  id: string
+  statement: string
+  kind: string | null
+  quote: string | null
+  section: string | null
+  block: number | null
+  start: number | null
+  end: number | null
+  verified: boolean
+  confidence: string | null
+  children: FilingClaim[]
+}
+
+export type FilingAnalysis = {
+  ticker: string
+  company_name: string
+  accession: string
+  document_url: string
+  filed: string
+  fiscal_year_end: string
+  sections: FilingSection[]
+  claims: FilingClaim[]
+  blocks: FilingBlock[]
+  flags: string[]
+  cached: boolean
+}
+
 export type WaccInput = {
   key: string
   label: string
@@ -120,6 +160,10 @@ export function searchTickers(
 ): Promise<TickerSearchResponse> {
   const params = new URLSearchParams({ q: query, limit: String(limit) })
   return request<TickerSearchResponse>(`/api/tickers?${params.toString()}`)
+}
+
+export function fetchFiling(ticker: string): Promise<FilingAnalysis> {
+  return request<FilingAnalysis>(`/api/filing/${encodeURIComponent(ticker)}`)
 }
 
 export function fetchWacc(ticker: string): Promise<WaccBreakdown> {

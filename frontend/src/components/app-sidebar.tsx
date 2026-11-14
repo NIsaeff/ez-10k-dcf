@@ -1,4 +1,8 @@
-import { AiChat01Icon, Calculator01Icon } from "@hugeicons/core-free-icons"
+import {
+  AiChat01Icon,
+  BookOpen01Icon,
+  Calculator01Icon,
+} from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 import { Link, useMatchRoute } from "@tanstack/react-router"
 
@@ -18,6 +22,7 @@ import {
 const navItems = [
   { title: "AI Chat", to: "/", icon: AiChat01Icon, exact: true },
   { title: "DCF Wizard", to: "/wizard", icon: Calculator01Icon, exact: false },
+  { title: "10-K Analysis", to: "/filing", icon: BookOpen01Icon, exact: false },
 ] as const
 
 export function AppSidebar() {
