@@ -12,11 +12,15 @@ import asyncio
 import os
 import re
 import threading
-from collections.abc import Awaitable, Callable
+import time
+import urllib.request
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
 from typing import Any
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
+from mcp.client.streamable_http import streamable_http_client
 
 from app.config import settings
 
@@ -41,6 +45,43 @@ class FredMCPError(RuntimeError):
 def configured() -> bool:
     """True when the chat should offer FRED tools to the model."""
     return settings.fred_mcp_enabled and bool(settings.fred_api_key)
+
+
+HEALTH_TTL_SECONDS = 10.0
+_health_cache: tuple[float, str] | None = None
+_health_lock = threading.Lock()
+
+
+def _healthz_url() -> str:
+    return settings.fred_mcp_url.removesuffix("/mcp").rstrip("/") + "/healthz"
+
+
+def _probe_healthz() -> str:
+    try:
+        with urllib.request.urlopen(_healthz_url(), timeout=1.5) as response:
+            return "ok" if response.status == 200 else "down"
+    except Exception:  # noqa: BLE001 - health must never raise
+        return "down"
+
+
+def health() -> str:
+    """ok | down | stdio | disabled, cached so /api/health stays cheap."""
+    global _health_cache
+    if not configured():
+        return "disabled"
+    if settings.fred_mcp_transport != "http":
+        return "stdio"
+
+    now = time.monotonic()
+    with _health_lock:
+        if _health_cache is not None and now - _health_cache[0] < HEALTH_TTL_SECONDS:
+            return _health_cache[1]
+
+    status = _probe_healthz()
+    with _health_lock:
+        _health_cache = (now, status)
+    return status
+
 
 
 def _server_params() -> StdioServerParameters:
@@ -79,14 +120,10 @@ def _flatten(error: BaseException) -> str:
 
 
 def _run[T](action: Callable[[ClientSession], Awaitable[T]]) -> T:
-    """Start the server, run one action against it, then shut it down."""
+    """Run one action against the MCP server."""
 
     async def main() -> T:
-        async with (
-            stdio_client(_server_params()) as (read, write),
-            ClientSession(read, write) as session,
-        ):
-            await session.initialize()
+        async with _session() as session:
             return await action(session)
 
     try:
@@ -94,11 +131,42 @@ def _run[T](action: Callable[[ClientSession], Awaitable[T]]) -> T:
     except FredMCPError:
         raise
     except TimeoutError as exc:
-        raise FredMCPError(f"FRED MCP timed out after {TIMEOUT_SECONDS:.0f}s") from exc
+        raise FredMCPError(
+            _hint(f"FRED MCP timed out after {TIMEOUT_SECONDS:.0f}s")
+        ) from exc
     except BaseExceptionGroup as group:  # anyio wraps subprocess failures
-        raise FredMCPError(_flatten(group)) from group
+        raise FredMCPError(_hint(_flatten(group))) from group
     except Exception as exc:
-        raise FredMCPError(f"{type(exc).__name__}: {exc}") from exc
+        raise FredMCPError(_hint(f"{type(exc).__name__}: {exc}")) from exc
+
+
+@asynccontextmanager
+async def _session() -> AsyncIterator[ClientSession]:
+    """One MCP session, over HTTP to the sidecar or over a fresh stdio child."""
+    if settings.fred_mcp_transport == "stdio":
+        async with (
+            stdio_client(_server_params()) as (read, write),
+            ClientSession(read, write) as session,
+        ):
+            await session.initialize()
+            yield session
+        return
+
+    async with (
+        streamable_http_client(settings.fred_mcp_url) as (read, write),
+        ClientSession(read, write) as session,
+    ):
+        await session.initialize()
+        yield session
+
+
+def _hint(message: str) -> str:
+    if settings.fred_mcp_transport == "stdio":
+        return message
+    return (
+        f"{message}\nIs the FRED MCP sidecar running? Start it with "
+        f"./scripts/dev-mcp.sh (expected at {settings.fred_mcp_url})."
+    )
 
 
 def _openai_tool(tool: Any) -> dict[str, Any]:
@@ -152,10 +220,11 @@ def call_tool(name: str, arguments: dict[str, Any]) -> str:
 
 
 def reset_cache() -> None:
-    """Drop cached tool schemas (used by tests)."""
-    global _tools_cache
-    with _tools_lock:
+    """Drop cached tool schemas and health state (used by tests)."""
+    global _tools_cache, _health_cache
+    with _tools_lock, _health_lock:
         _tools_cache = None
+        _health_cache = None
 
 
 _SERIES_ID = re.compile(r'"series_id"\s*:\s*"([A-Za-z0-9_-]+)"')

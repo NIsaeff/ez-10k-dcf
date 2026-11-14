@@ -262,6 +262,7 @@ class HealthResponse(BaseModel):
     llm_model: str
     llm_configured: bool
     supported_tickers: list[str]
+    fred_mcp: str = "disabled"
     extra: dict[str, Any] | None = None
 
 

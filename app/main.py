@@ -73,6 +73,7 @@ def health() -> HealthResponse:
         llm_model=settings.llm_model,
         llm_configured=bool(settings.openai_api_key),
         supported_tickers=SUPPORTED_TICKERS,
+        fred_mcp=fred_mcp.health(),
     )
 
 

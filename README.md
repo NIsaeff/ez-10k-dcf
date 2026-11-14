@@ -35,8 +35,9 @@ cp .env.example .env
 Frontend-only dev loop (HMR on the port in `.env`, proxy to the API port):
 
 ```bash
-./scripts/dev-backend.sh      # terminal 1 — API, port from PORT in .env
-cd frontend && bun run dev    # terminal 2 — UI, port from FRONTEND_PORT
+./scripts/dev-mcp.sh          # terminal 1 — FRED MCP sidecar, port from FRED_MCP_PORT
+./scripts/dev-backend.sh      # terminal 2 — API, port from PORT in .env
+cd frontend && bun run dev    # terminal 3 — UI, port from FRONTEND_PORT
 ```
 
 Ports are declared once in `.env`, so several worktrees can run side by side:
@@ -94,28 +95,39 @@ pilot allowlist.
 
 The chat can query macro series — Treasury yields, CPI, GDP, unemployment — through the
 third-party [`fred-mcp-server`](https://github.com/stefanoamorelli/fred-mcp-server)
-(AGPL-3.0). It runs as a separate Node process over stdio; none of its code is imported
-or vendored into this repo.
+(AGPL-3.0). It runs as a long-lived HTTP sidecar (`./scripts/dev-mcp.sh`); none of its
+code is imported or vendored into this repo.
 
 - **This app owns `FRED_API_KEY`.** `app/config.py` reads it from `.env` and forwards it
-  to the child process's environment, so the key has exactly one owner.
+  to the sidecar's environment, so the key has exactly one owner.
+- **One process, warm cache.** The sidecar caches upstream FRED responses
+  (`FRED_CACHE_TTL_MS`) and enforces FRED's 120 req/min budget in one place, and both
+  survive app reloads. A per-call stdio spawn discards that state every request, which
+  made each chat turn cost 3 process launches; `FRED_MCP_TRANSPORT=stdio` restores the
+  old behaviour for comparison.
 - The server's own schemas (`fred_search`, `fred_browse`, `fred_get_series`) are turned
   into OpenAI `tools` at runtime, so upstream tool changes need no code change here.
 - `app/llm.py` runs up to 4 tool rounds. `/api/chat` returns a `trace` (each call's
   input, output, status and duration) plus `sources` (the series actually fetched), and
   the chat renders them with the shadcn AI Elements *Chain of Thought* → *Tool* → *Sources*
   patterns, so a lookup is inspectable rather than invisible.
-- If the server is missing or fails, the chat answers without tools instead of erroring.
+- If the sidecar is down, `/api/health` reports `fred_mcp: "down"` and the chat answers
+  without tools instead of erroring.
 
 Launch note: `fred-mcp-server` 1.2.0 only boots when Node receives the **real** path of
 its entrypoint — its `isMainModule` guard compares `import.meta.url` with
 `process.argv[1]`, and `npx` puts a symlink on `PATH`, so plain `npx fred-mcp-server`
-exits silently. `app/services/fred_mcp.py` resolves the symlink before launching.
+exits silently. Both `app/services/fred_mcp.py` and `scripts/dev-mcp.sh` resolve the
+symlink before launching.
 
 ```ini
 FRED_API_KEY=...                    # required — https://fredaccount.stlouisfed.org/apikeys
+FRED_MCP_URL=http://127.0.0.1:3101/mcp   # sidecar endpoint, one per worktree
+FRED_MCP_PORT=3101                       # port the sidecar binds
+FRED_CACHE_TTL_MS=21600000               # 6h; daily/monthly series barely move intraday
 FRED_MCP_ENABLED=true               # false = keep the chat LLM-only
 FRED_MCP_PACKAGE=fred-mcp-server    # pin if needed, e.g. fred-mcp-server@1.2.0
+FRED_MCP_TRANSPORT=http             # stdio = spawn per call (no shared cache)
 ```
 
 ## Layout

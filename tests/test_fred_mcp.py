@@ -222,3 +222,46 @@ def test_series_sources_ignores_output_without_a_series_id() -> None:
         )
         == []
     )
+
+
+def test_health_is_disabled_without_a_key(monkeypatch) -> None:
+    fred_mcp.reset_cache()
+    monkeypatch.setattr(fred_mcp.settings, "fred_api_key", "")
+    assert fred_mcp.health() == "disabled"
+
+
+def test_health_reports_stdio_transport(monkeypatch) -> None:
+    fred_mcp.reset_cache()
+    monkeypatch.setattr(fred_mcp.settings, "fred_api_key", "key")
+    monkeypatch.setattr(fred_mcp.settings, "fred_mcp_transport", "stdio")
+    assert fred_mcp.health() == "stdio"
+
+
+def test_health_probes_the_sidecar_once(monkeypatch) -> None:
+    fred_mcp.reset_cache()
+    monkeypatch.setattr(fred_mcp.settings, "fred_api_key", "key")
+    monkeypatch.setattr(fred_mcp.settings, "fred_mcp_transport", "http")
+
+    probes: list[str] = []
+
+    def probe() -> str:
+        probes.append("probe")
+        return "ok"
+
+    monkeypatch.setattr(fred_mcp, "_probe_healthz", probe)
+
+    assert fred_mcp.health() == "ok"
+    assert fred_mcp.health() == "ok"
+    assert len(probes) == 1
+
+
+def test_transport_errors_point_at_the_sidecar_script(monkeypatch) -> None:
+    monkeypatch.setattr(fred_mcp.settings, "fred_mcp_transport", "http")
+    hint = fred_mcp._hint("Connection refused")
+    assert "./scripts/dev-mcp.sh" in hint
+    assert fred_mcp.settings.fred_mcp_url in hint
+
+
+def test_stdio_errors_do_not_mention_the_sidecar(monkeypatch) -> None:
+    monkeypatch.setattr(fred_mcp.settings, "fred_mcp_transport", "stdio")
+    assert fred_mcp._hint("Connection closed") == "Connection closed"
