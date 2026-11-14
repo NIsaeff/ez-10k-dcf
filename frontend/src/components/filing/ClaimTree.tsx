@@ -127,13 +127,24 @@ function EditedBadge() {
   )
 }
 
-function JumpLabel({ claim }: { claim: FilingClaim }) {
+function JumpLabel({
+  claim,
+  onJump,
+}: {
+  claim: FilingClaim
+  onJump: (claim: FilingClaim) => void
+}) {
   if (claim.verified && claim.block !== null) {
     return (
-      <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground group-hover/claim:text-foreground">
+      <button
+        type="button"
+        data-jump={claim.id}
+        onClick={() => onJump(claim)}
+        className="inline-flex items-center gap-1 rounded px-1 py-0.5 text-[10px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+      >
         <span>jump to source</span>
         <HugeiconsIcon icon={ArrowUpRight01Icon} strokeWidth={2} className="size-3" />
-      </span>
+      </button>
     )
   }
   return (
@@ -167,6 +178,7 @@ function ClaimCard({
 
   return (
     <div
+      data-claim-id={claim.id}
       className={`group/claim rounded-lg border px-2.5 py-2 transition-colors ${
         isActive
           ? "border-primary/60 bg-primary/10"
@@ -233,7 +245,7 @@ function ClaimCard({
               </button>
             ) : null}
             <span className="ml-auto">
-              <JumpLabel claim={claim} />
+              <JumpLabel claim={claim} onJump={handlers.onJump} />
             </span>
           </div>
         </>
@@ -307,6 +319,7 @@ function ClaimBranch({
         {claim.verified && claim.block !== null ? (
           <button
             type="button"
+            data-jump={claim.id}
             onClick={() => handlers.onJump(claim)}
             className="text-[10px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
           >

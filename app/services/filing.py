@@ -311,7 +311,9 @@ BRIDGE = r"""
     for (var i = 0; i < nodes.length; i += 1) {
       var value = nodes[i].nodeValue;
       spans.push({ node: nodes[i], start: raw.length, end: raw.length + value.length });
-      raw += value;
+      // A separator mirrors how block text is extracted server-side; without it,
+      // words either side of inline markup get glued together.
+      raw += value + " ";
     }
 
     var chars = [];

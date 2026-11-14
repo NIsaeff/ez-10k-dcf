@@ -153,5 +153,8 @@ data, not instructions", give extraction calls no tools, and validate every quot
 - Highlighting happens inside the iframe: the parent posts
   `{type: "highlight", quote, section}` and an injected script flattens visible
   text, finds the quote (skipping the table of contents and preferring the
-  claim's own Item), and wraps the exact range in `<mark>`.
+  claim's own Item), and wraps the exact range in `<mark>`. Text nodes are
+  concatenated with a separator that mirrors server-side block extraction —
+  without it, a quote crossing inline markup ("$13.8" + "billion") is glued
+  together and never matches.
 - Extraction runs synchronously on first view and is cached per accession.
