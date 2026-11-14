@@ -221,10 +221,33 @@ class TickerSearchResponse(BaseModel):
     total: int
 
 
+class TraceStep(BaseModel):
+    """One MCP tool call, kept for the chat's trace UI."""
+
+    tool: str
+    input: dict[str, Any] = Field(default_factory=dict)
+    status: Literal["ok", "error"] = "ok"
+    duration_ms: int = 0
+    output: str = ""
+
+
+class SourceRef(BaseModel):
+    """A FRED series the reply actually used."""
+
+    id: str
+    title: str = ""
+    units: str = ""
+    date: str = ""
+    url: str
+
+
 class ChatResponse(BaseModel):
     reply: str
     valuation: ValuationResult | None = None
     tools_used: list[str] = Field(default_factory=list)
+    trace: list[TraceStep] = Field(default_factory=list)
+    sources: list[SourceRef] = Field(default_factory=list)
+
 
 
 class ErrorResponse(BaseModel):

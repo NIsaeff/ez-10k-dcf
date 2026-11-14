@@ -102,16 +102,36 @@ export type ValuationResult = {
   disclaimer: string;
 };
 
+export type TraceStep = {
+  tool: string;
+  input: Record<string, unknown>;
+  status: "ok" | "error";
+  duration_ms: number;
+  output: string;
+};
+
+export type SourceRef = {
+  id: string;
+  title: string;
+  units: string;
+  date: string;
+  url: string;
+};
+
 export type ChatMessage = {
   id: string;
   role: ChatRole;
   content: string;
   valuation?: ValuationResult | null;
+  trace?: TraceStep[];
+  sources?: SourceRef[];
 };
 
 export type ChatReply = {
   reply: string;
   valuation: ValuationResult | null;
+  trace: TraceStep[];
+  sources: SourceRef[];
 };
 
 // TODO(chat-history): every request sends the full conversation, so payload
@@ -131,5 +151,10 @@ export async function sendChat(messages: ChatMessage[]): Promise<ChatReply> {
   if (!res.ok) throw new Error(`Chat request failed: ${res.status}`);
 
   const data = (await res.json()) as ChatReply;
-  return { reply: data.reply, valuation: data.valuation ?? null };
+  return {
+    reply: data.reply,
+    valuation: data.valuation ?? null,
+    trace: data.trace ?? [],
+    sources: data.sources ?? [],
+  };
 }

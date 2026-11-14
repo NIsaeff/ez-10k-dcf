@@ -108,10 +108,14 @@ def test_chat_reply_executes_tool_then_answers(monkeypatch) -> None:
     )
     monkeypatch.setattr(llm, "get_client", lambda: client)
 
-    reply, tools_used = llm.chat_reply([{"role": "user", "content": "10Y yield?"}])
+    reply, trace = llm.chat_reply([{"role": "user", "content": "10Y yield?"}])
 
     assert reply == "The 10Y yield is 4.12%."
-    assert tools_used == ["fred_get_series"]
+    assert [step["tool"] for step in trace] == ["fred_get_series"]
+    assert trace[0]["status"] == "ok"
+    assert trace[0]["input"] == {"series_id": "DGS10"}
+    assert trace[0]["duration_ms"] >= 0
+    assert "4.12" in trace[0]["output"]
     # The second round must carry the tool result back to the model.
     tool_turns = [m for m in client.requests[1]["messages"] if m["role"] == "tool"]
     assert tool_turns[0]["tool_call_id"] == "call_1"
@@ -135,10 +139,10 @@ def test_chat_reply_reports_tool_errors_to_the_model(monkeypatch) -> None:
     )
     monkeypatch.setattr(llm, "get_client", lambda: client)
 
-    reply, tools_used = llm.chat_reply([{"role": "user", "content": "10Y?"}])
+    reply, trace = llm.chat_reply([{"role": "user", "content": "10Y?"}])
 
     assert reply == "I couldn't reach FRED."
-    assert tools_used == ["fred_get_series"]
+    assert [step["status"] for step in trace] == ["error"]
     tool_turn = next(m for m in client.requests[1]["messages"] if m["role"] == "tool")
     assert tool_turn["content"].startswith("ERROR calling fred_get_series")
 
@@ -147,10 +151,10 @@ def test_chat_reply_skips_tools_when_unconfigured(monkeypatch) -> None:
     monkeypatch.setattr(fred_mcp.settings, "fred_api_key", "")
     monkeypatch.setattr(llm, "complete", lambda messages, **_: "plain reply")
 
-    reply, tools_used = llm.chat_reply([{"role": "user", "content": "hi"}])
+    reply, trace = llm.chat_reply([{"role": "user", "content": "hi"}])
 
     assert reply == "plain reply"
-    assert tools_used == []
+    assert trace == []
 
 
 def test_chat_reply_survives_a_broken_mcp_server(monkeypatch) -> None:
@@ -163,6 +167,58 @@ def test_chat_reply_survives_a_broken_mcp_server(monkeypatch) -> None:
     monkeypatch.setattr(fred_mcp, "openai_tools", boom)
     monkeypatch.setattr(llm, "complete", lambda messages, **_: "plain reply")
 
-    reply, tools_used = llm.chat_reply([{"role": "user", "content": "hi"}])
+    reply, trace = llm.chat_reply([{"role": "user", "content": "hi"}])
 
-    assert (reply, tools_used) == ("plain reply", [])
+    assert (reply, trace) == ("plain reply", [])
+
+
+def test_series_sources_reads_only_successful_get_series() -> None:
+    trace = [
+        {"tool": "fred_search", "status": "ok", "output": '{"series_id":"NOPE"}'},
+        {"tool": "fred_get_series", "status": "error", "output": '{"series_id":"BAD"}'},
+        {
+            "tool": "fred_get_series",
+            "status": "ok",
+            "output": (
+                '{"series_id":"DGS10","title":"10Y","units":"Percent",'
+                '"data":[{"date":"2026-11-11"},{"date":"2026-11-12"}]}'
+            ),
+        },
+        # Same series twice in one turn must not duplicate the chip.
+        {
+            "tool": "fred_get_series",
+            "status": "ok",
+            "output": '{"series_id":"DGS10","title":"10Y","units":"Percent"}',
+        },
+    ]
+    assert fred_mcp.series_sources(trace) == [
+        {
+            "id": "DGS10",
+            "title": "10Y",
+            "units": "Percent",
+            "date": "2026-11-12",
+            "url": "https://fred.stlouisfed.org/series/DGS10",
+        }
+    ]
+
+
+def test_series_sources_survives_truncated_output() -> None:
+    # Metadata sits above the observation array, so a hard cut still parses.
+    truncated = (
+        '{\n  "series_id": "CPIAUCSL",\n  "title": "CPI",\n  "units": "Index",\n'
+        '  "data": [{"date": "2026-10-01", "value": 3'
+    )
+    sources = fred_mcp.series_sources(
+        [{"tool": "fred_get_series", "status": "ok", "output": truncated}]
+    )
+    assert sources[0]["id"] == "CPIAUCSL"
+    assert sources[0]["date"] == "2026-10-01"
+
+
+def test_series_sources_ignores_output_without_a_series_id() -> None:
+    assert (
+        fred_mcp.series_sources(
+            [{"tool": "fred_get_series", "status": "ok", "output": "garbage"}]
+        )
+        == []
+    )

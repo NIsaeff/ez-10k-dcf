@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 from functools import lru_cache
 from typing import Any
 
@@ -102,11 +103,11 @@ def complete(
     return content
 
 
-def chat_reply(messages: list[dict[str, str]]) -> tuple[str, list[str]]:
+def chat_reply(messages: list[dict[str, str]]) -> tuple[str, list[dict[str, Any]]]:
     """Answer a chat turn, using FRED MCP tools when they are configured.
 
-    Returns the reply text plus the names of the MCP tools that were used, so
-    the UI can show that a macro lookup actually happened.
+    Returns the reply text plus the tool trace (one entry per MCP call) so the
+    UI can show what the assistant actually looked up.
     """
     limited = messages[-20:]
     system = CHAT_SYSTEM_PROMPT
@@ -128,8 +129,8 @@ def chat_reply(messages: list[dict[str, str]]) -> tuple[str, list[str]]:
 
 def _tool_loop(
     conversation: list[dict[str, Any]], tools: list[dict[str, Any]]
-) -> tuple[str, list[str]]:
-    used: list[str] = []
+) -> tuple[str, list[dict[str, Any]]]:
+    trace: list[dict[str, Any]] = []
 
     for _ in range(MAX_TOOL_ROUNDS):
         try:
@@ -139,14 +140,15 @@ def _tool_loop(
 
         calls = list(message.tool_calls or [])
         if not calls:
-            return (message.content or ""), used
+            return (message.content or ""), trace
 
         conversation.append(_assistant_turn(message.content, calls))
         for call in calls:
-            used.append(call.function.name)
-            conversation.append(_tool_turn(call))
+            turn, step = _tool_turn(call)
+            conversation.append(turn)
+            trace.append(step)
 
-    return complete(conversation), used
+    return complete(conversation), trace
 
 
 def _complete_with_tools(
@@ -179,15 +181,28 @@ def _assistant_turn(content: str | None, calls: list[Any]) -> dict[str, Any]:
     }
 
 
-def _tool_turn(call: Any) -> dict[str, Any]:
+def _tool_turn(call: Any) -> tuple[dict[str, Any], dict[str, Any]]:
+    arguments: dict[str, Any] = {}
+    status = "ok"
+    started = time.perf_counter()
+
     try:
-        arguments = json.loads(call.function.arguments or "{}")
-        if not isinstance(arguments, dict):
-            arguments = {}
+        parsed = json.loads(call.function.arguments or "{}")
+        if isinstance(parsed, dict):
+            arguments = parsed
         content = fred_mcp.call_tool(call.function.name, arguments)
     except Exception as exc:  # noqa: BLE001 - report the failure to the model
+        status = "error"
         content = f"ERROR calling {call.function.name}: {exc}"
-    return {"role": "tool", "tool_call_id": call.id, "content": content}
+
+    step = {
+        "tool": call.function.name,
+        "input": arguments,
+        "status": status,
+        "duration_ms": int((time.perf_counter() - started) * 1000),
+        "output": content,
+    }
+    return {"role": "tool", "tool_call_id": call.id, "content": content}, step
 
 
 def _fallback_narration(result: ValuationResult) -> str:

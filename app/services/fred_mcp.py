@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 import threading
 from collections.abc import Awaitable, Callable
 from typing import Any
@@ -155,3 +156,47 @@ def reset_cache() -> None:
     global _tools_cache
     with _tools_lock:
         _tools_cache = None
+
+
+_SERIES_ID = re.compile(r'"series_id"\s*:\s*"([A-Za-z0-9_-]+)"')
+_SERIES_TITLE = re.compile(r'"title"\s*:\s*"([^"]*)"')
+_SERIES_UNITS = re.compile(r'"units"\s*:\s*"([^"]*)"')
+_DATE = re.compile(r'"date"\s*:\s*"(\d{4}-\d{2}-\d{2})"')
+
+
+def _first(pattern: re.Pattern[str], text: str) -> str:
+    match = pattern.search(text)
+    return match.group(1) if match else ""
+
+
+def series_sources(trace: list[dict[str, Any]]) -> list[dict[str, str]]:
+    """FRED series actually fetched, as citation chips.
+
+    Reads the call output rather than the arguments, so a series that failed to
+    load is never cited. Metadata sits at the top of the JSON, ahead of the
+    observation array, so the regex still works on truncated output.
+    """
+    seen: set[str] = set()
+    sources: list[dict[str, str]] = []
+
+    for step in trace:
+        if step.get("tool") != "fred_get_series" or step.get("status") != "ok":
+            continue
+        output = str(step.get("output") or "")
+        series_id = _first(_SERIES_ID, output)
+        if not series_id or series_id in seen:
+            continue
+        seen.add(series_id)
+        dates = _DATE.findall(output)
+        sources.append(
+            {
+                "id": series_id,
+                "title": _first(_SERIES_TITLE, output),
+                "units": _first(_SERIES_UNITS, output),
+                "date": max(dates) if dates else "",
+                "url": f"https://fred.stlouisfed.org/series/{series_id}",
+            }
+        )
+
+    return sources
+

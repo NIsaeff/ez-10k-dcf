@@ -101,8 +101,10 @@ or vendored into this repo.
   to the child process's environment, so the key has exactly one owner.
 - The server's own schemas (`fred_search`, `fred_browse`, `fred_get_series`) are turned
   into OpenAI `tools` at runtime, so upstream tool changes need no code change here.
-- `app/llm.py` runs up to 4 tool rounds. `/api/chat` returns `tools_used`, so the UI can
-  show that a lookup actually happened.
+- `app/llm.py` runs up to 4 tool rounds. `/api/chat` returns a `trace` (each call's
+  input, output, status and duration) plus `sources` (the series actually fetched), and
+  the chat renders them with the shadcn AI Elements *Chain of Thought* → *Tool* → *Sources*
+  patterns, so a lookup is inspectable rather than invisible.
 - If the server is missing or fails, the chat answers without tools instead of erroring.
 
 Launch note: `fred-mcp-server` 1.2.0 only boots when Node receives the **real** path of
