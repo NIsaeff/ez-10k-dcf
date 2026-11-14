@@ -32,6 +32,7 @@ export type Assumptions = {
   growth_rate: number;
   growth_model: GrowthModel;
   growth_source: string;
+  capex_rate?: number | null;
   fcff_base: number;
   fcff_base_source: string;
   share_count_source: string;

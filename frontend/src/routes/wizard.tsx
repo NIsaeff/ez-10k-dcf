@@ -41,19 +41,13 @@ function WizardPage() {
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState(true)
 
-  const { ticker, years, terminal, model, wacc } = search
+  const { ticker, years, terminal, model, wacc, growth, tax, capex, shares } = search
 
   useEffect(() => {
     let cancelled = false
     setPending(true)
 
-    const overrides = overridesFromSearch({
-      ticker,
-      years,
-      terminal,
-      model,
-      wacc,
-    })
+    const overrides = overridesFromSearch(search)
 
     const timer = setTimeout(() => {
       Promise.all([
@@ -81,7 +75,7 @@ function WizardPage() {
       cancelled = true
       clearTimeout(timer)
     }
-  }, [ticker, years, terminal, model, wacc])
+  }, [ticker, years, terminal, model, wacc, growth, tax, capex, shares])
 
   useEffect(() => {
     let cancelled = false

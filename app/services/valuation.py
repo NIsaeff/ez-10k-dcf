@@ -89,7 +89,15 @@ def analyze_from_company(
 ) -> ValuationResult:
     ticker = company.ticker
 
-    history, history_flags = dcf.build_history(company.raw_years)
+    tax_override = overrides.tax_rate if overrides is not None else None
+    capex_override = overrides.capex_rate if overrides is not None else None
+    shares_override = overrides.shares_outstanding if overrides is not None else None
+
+    history, history_flags = dcf.build_history(
+        company.raw_years,
+        tax_rate_override=tax_override,
+        capex_rate=capex_override,
+    )
     if not history:
         raise financials.InsufficientData(
             ticker,
@@ -101,8 +109,15 @@ def analyze_from_company(
 
     latest = history[-1]
     latest_raw = company.raw_years[-1]
-    tax_rate, tax_default = dcf.effective_tax_rate(
-        latest_raw.get("tax_expense"), latest_raw.get("pretax_income")
+    if tax_override is not None:
+        tax_rate, tax_default = tax_override, False
+    else:
+        tax_rate, tax_default = dcf.effective_tax_rate(
+            latest_raw.get("tax_expense"), latest_raw.get("pretax_income")
+        )
+
+    shares_outstanding = (
+        shares_override if shares_override is not None else company.shares_outstanding
     )
 
     # Effective assumptions: engine defaults, then any user overrides.
@@ -131,6 +146,12 @@ def analyze_from_company(
             wacc = overrides.wacc
             wacc_source = "override"
             applied.append("wacc")
+        if overrides.tax_rate is not None:
+            applied.append("tax_rate")
+        if overrides.capex_rate is not None:
+            applied.append("capex_rate")
+        if overrides.shares_outstanding is not None:
+            applied.append("shares_outstanding")
 
     if wacc <= terminal_growth:
         raise InvalidAssumptions(
@@ -155,7 +176,7 @@ def analyze_from_company(
         wacc=wacc,
         total_debt=company.total_debt,
         cash_and_equivalents=company.cash_and_equivalents,
-        shares_outstanding=company.shares_outstanding,
+        shares_outstanding=shares_outstanding,
     )
 
     flags = list(
@@ -178,13 +199,20 @@ def analyze_from_company(
         wacc=wacc,
         wacc_source=wacc_source,
         tax_rate=tax_rate,
-        tax_rate_source="default" if tax_default else "effective_from_filing",
+        tax_rate_source=(
+            "override"
+            if tax_override is not None
+            else ("default" if tax_default else "effective_from_filing")
+        ),
         growth_rate=growth,
         growth_model=growth_model,
         growth_source=growth_source,
+        capex_rate=capex_override,
         fcff_base=base_fcff,
         fcff_base_source=base_source,
-        share_count_source=company.share_count_source,
+        share_count_source=(
+            "override" if shares_override is not None else company.share_count_source
+        ),
         net_debt_treatment="total_debt_minus_cash",
     )
 
@@ -198,7 +226,7 @@ def analyze_from_company(
         base_wacc=WACC_DEFAULTS.get(ticker, GENERIC_WACC),
         total_debt=company.total_debt,
         cash=company.cash_and_equivalents,
-        shares_outstanding=company.shares_outstanding,
+        shares_outstanding=shares_outstanding,
         tax_rate=tax_rate,
         base_year=latest.fiscal_year,
     )

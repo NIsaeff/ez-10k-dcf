@@ -24,7 +24,10 @@ export function withPreview(
     wacc: search.wacc === undefined ? engine.base_wacc : search.wacc / 100,
     totalDebt: engine.total_debt,
     cash: engine.cash,
-    shares: engine.shares_outstanding,
+    shares:
+      search.shares === undefined
+        ? engine.shares_outstanding
+        : search.shares * 1_000_000,
   }
 
   let computed

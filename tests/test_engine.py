@@ -141,3 +141,49 @@ def test_sensitivity_returns_none_below_terminal_growth() -> None:
     assert any(cell is None for row in values for cell in row)
     # Teams that would divide by a negative spread are blank, not inf.
     assert all(cell is None or cell > 0 for row in values for cell in row)
+
+
+def test_tax_override_replaces_effective_rate() -> None:
+    company = company_from_fixture("KO")
+    base = valuation.analyze_from_company(company)
+    taxed = valuation.analyze_from_company(company, DcfOverrides(tax_rate=0.35))
+
+    assert taxed.assumptions.tax_rate == 0.35
+    assert taxed.assumptions.tax_rate_source == "override"
+    assert "tax_rate_override" in taxed.flags
+    assert "tax_rate_default" not in taxed.flags
+    assert "tax_rate" in taxed.overrides_applied
+    # A 35% rate leaves less after-tax EBIT, so FCFF and value both fall.
+    assert taxed.history[-1].fcff < base.history[-1].fcff
+    assert taxed.valuation.value_per_share < base.valuation.value_per_share
+
+
+def test_capex_override_uses_percent_of_revenue() -> None:
+    company = company_from_fixture("KO")
+    base = valuation.analyze_from_company(company)
+    capex_heavy = valuation.analyze_from_company(company, DcfOverrides(capex_rate=0.15))
+
+    assert capex_heavy.assumptions.capex_rate == 0.15
+    assert "capex_rate_override" in capex_heavy.flags
+    assert "capex_rate" in capex_heavy.overrides_applied
+
+    latest = capex_heavy.history[-1]
+    assert latest.revenue is not None
+    assert latest.capital_expenditures == pytest.approx(latest.revenue * 0.15)
+    assert capex_heavy.valuation.value_per_share < base.valuation.value_per_share
+
+
+def test_shares_override_scales_per_share() -> None:
+    company = company_from_fixture("KO")
+    base = valuation.analyze_from_company(company)
+    doubled = valuation.analyze_from_company(
+        company,
+        DcfOverrides(shares_outstanding=company.shares_outstanding * 2),
+    )
+
+    assert doubled.assumptions.share_count_source == "override"
+    assert doubled.engine is not None
+    assert doubled.engine.shares_outstanding == company.shares_outstanding * 2
+    assert doubled.valuation.value_per_share == pytest.approx(
+        base.valuation.value_per_share / 2
+    )

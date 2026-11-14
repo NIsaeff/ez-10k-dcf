@@ -60,6 +60,7 @@ class Assumptions(BaseModel):
     growth_rate: float
     growth_model: GrowthModel = "fade"
     growth_source: str
+    capex_rate: float | None = None
     fcff_base: float
     fcff_base_source: str
     share_count_source: str
@@ -93,6 +94,9 @@ class DcfOverrides(BaseModel):
     growth_rate: float | None = Field(default=None, ge=-0.50, le=1.00)
     growth_model: GrowthModel | None = None
     wacc: float | None = Field(default=None, ge=0.01, le=0.30)
+    tax_rate: float | None = Field(default=None, ge=0.0, le=0.50)
+    capex_rate: float | None = Field(default=None, ge=0.0, le=0.50)
+    shares_outstanding: float | None = Field(default=None, gt=0)
 
 
 class SensitivityRequest(DcfOverrides):

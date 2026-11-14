@@ -27,10 +27,20 @@ Re-runs the engine with assumption overrides (wizard recalc). Body is
 
 ```json
 { "projection_years": 7, "terminal_growth_rate": 0.03,
-  "growth_model": "fade", "growth_rate": 0.08, "wacc": 0.085 }
+  "growth_model": "fade", "growth_rate": 0.08, "wacc": 0.085,
+  "tax_rate": 0.30, "capex_rate": 0.08, "shares_outstanding": 4000000000 }
 ```
 
-Bounds: years 3–10, terminal 0–10%, growth −50%…100%, WACC 1–30%.
+Bounds: years 3–10, terminal 0–10%, growth −50%…100%, WACC 1–30%, tax 0–50%,
+CapEx 0–50% of revenue, shares > 0.
+
+- `tax_rate` replaces the per-year effective rate for every history year, so it
+  changes FCFF, the normalized base and growth. Flag `tax_rate_override`.
+- `capex_rate` sets CapEx to a share of revenue per year; years without revenue
+  keep the filing's CapEx. Flags `capex_rate_override` / `capex_rate_unavailable`.
+- `shares_outstanding` replaces the diluted count used for the per-share step
+  (a static count, not a buyback model). `assumptions.share_count_source`
+  becomes `override`.
 `wacc <= terminal_growth` → `422 invalid_assumptions`. The response is a normal
 `ValuationResult` with `overrides_applied` listing what was used and `engine`
 holding the exact inputs.

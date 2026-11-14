@@ -10,6 +10,14 @@ export type WizardSearch = {
   model: GrowthModel
   /** WACC override in percent; undefined means "use the engine default". */
   wacc?: number
+  /** Year-1 growth override in percent. */
+  growth?: number
+  /** Tax-rate override in percent. */
+  tax?: number
+  /** CapEx override as a percent of revenue. */
+  capex?: number
+  /** Share-count override, in millions. */
+  shares?: number
 }
 
 const TICKER_PATTERN = /^[A-Z0-9.-]{1,10}$/
@@ -58,12 +66,32 @@ export function validateWizardSearch(
       ? clamp(waccValue, 1, 30)
       : undefined
 
+  const optionalPercent = (
+    raw: unknown,
+    low: number,
+    high: number,
+  ): number | undefined => {
+    if (raw === undefined) return undefined
+    const value = toNumber(raw, NaN)
+    return Number.isFinite(value) ? clamp(value, low, high) : undefined
+  }
+
+  const sharesValue = search.shares === undefined ? undefined : toNumber(search.shares, NaN)
+  const shares =
+    sharesValue !== undefined && Number.isFinite(sharesValue) && sharesValue > 0
+      ? clamp(sharesValue, 1, 100_000)
+      : undefined
+
   return {
     ticker,
     years: Math.round(clamp(toNumber(search.years, DEFAULT_SEARCH.years), 3, 10)),
     terminal: clamp(toNumber(search.terminal, DEFAULT_SEARCH.terminal), 1, 5),
     model,
     wacc,
+    growth: optionalPercent(search.growth, 0, 25),
+    tax: optionalPercent(search.tax, 0, 40),
+    capex: optionalPercent(search.capex, 0, 40),
+    shares,
   }
 }
 
@@ -79,5 +107,13 @@ export function overridesFromSearch(search: WizardSearch): DcfOverrides {
     terminal_growth_rate: toRate(search.terminal),
     growth_model: search.model,
     ...(search.wacc === undefined ? {} : { wacc: toRate(search.wacc) }),
+    ...(search.growth === undefined
+      ? {}
+      : { growth_rate: toRate(search.growth) }),
+    ...(search.tax === undefined ? {} : { tax_rate: toRate(search.tax) }),
+    ...(search.capex === undefined ? {} : { capex_rate: toRate(search.capex) }),
+    ...(search.shares === undefined
+      ? {}
+      : { shares_outstanding: search.shares * 1_000_000 }),
   }
 }

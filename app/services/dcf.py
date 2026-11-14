@@ -23,12 +23,21 @@ def effective_tax_rate(tax_expense: float | None, pretax_income: float | None) -
     return clamp(tax_expense / pretax_income, 0.0, 0.35), False
 
 
-def build_history(raw_years: list[dict]) -> tuple[list[YearFinancials], list[str]]:
+def build_history(
+    raw_years: list[dict],
+    *,
+    tax_rate_override: float | None = None,
+    capex_rate: float | None = None,
+) -> tuple[list[YearFinancials], list[str]]:
     """Turn raw annual rows into FCFF history.
 
     Each raw row needs: fiscal_year, ebit, depreciation_amortization,
     capital_expenditures. Optional: revenue, pretax_income, tax_expense,
     current_assets, current_liabilities.
+
+    Overrides let the wizard test assumptions: ``tax_rate_override`` replaces the
+    per-year effective rate, and ``capex_rate`` replaces CapEx with a share of
+    revenue (skipped per year when revenue is missing).
     """
     flags: list[str] = []
     rows = [
@@ -46,11 +55,29 @@ def build_history(raw_years: list[dict]) -> tuple[list[YearFinancials], list[str
     used_default_tax = False
     used_nwc_fallback = False
 
+    used_capex_override = False
+    capex_skipped = False
+
     for row in rows:
-        tax_rate, defaulted = effective_tax_rate(
-            row.get("tax_expense"), row.get("pretax_income")
-        )
-        used_default_tax = used_default_tax or defaulted
+        if tax_rate_override is None:
+            tax_rate, defaulted = effective_tax_rate(
+                row.get("tax_expense"), row.get("pretax_income")
+            )
+            used_default_tax = used_default_tax or defaulted
+        else:
+            tax_rate = tax_rate_override
+            defaulted = False
+
+        revenue = row.get("revenue")
+        if capex_rate is not None:
+            if revenue is not None:
+                capex = revenue * capex_rate
+                used_capex_override = True
+            else:
+                capex = row["capital_expenditures"]
+                capex_skipped = True
+        else:
+            capex = row["capital_expenditures"]
 
         current_assets = row.get("current_assets")
         current_liabilities = row.get("current_liabilities")
@@ -72,7 +99,7 @@ def build_history(raw_years: list[dict]) -> tuple[list[YearFinancials], list[str
         fcff = (
             row["ebit"] * (1.0 - tax_rate)
             + row["depreciation_amortization"]
-            - row["capital_expenditures"]
+            - capex
             - change_in_nwc
         )
 
@@ -84,14 +111,20 @@ def build_history(raw_years: list[dict]) -> tuple[list[YearFinancials], list[str
                 pretax_income=row.get("pretax_income"),
                 tax_expense=row.get("tax_expense"),
                 depreciation_amortization=row["depreciation_amortization"],
-                capital_expenditures=row["capital_expenditures"],
+                capital_expenditures=capex,
                 change_in_nwc=change_in_nwc if nwc is not None else None,
                 fcff=fcff,
             )
         )
 
-    if used_default_tax:
+    if tax_rate_override is not None:
+        flags.append("tax_rate_override")
+    elif used_default_tax:
         flags.append("tax_rate_default")
+    if used_capex_override:
+        flags.append("capex_rate_override")
+    if capex_skipped:
+        flags.append("capex_rate_unavailable")
     if used_nwc_fallback:
         flags.append("nwc_unavailable")
     if len(history) < 3:

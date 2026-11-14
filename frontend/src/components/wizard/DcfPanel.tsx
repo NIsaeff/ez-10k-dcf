@@ -9,6 +9,25 @@ import { buildBreakdownLines } from "@/lib/derivation"
 import { compact, pct, perShare } from "@/lib/format"
 import type { WizardSearch } from "@/lib/wizard-state"
 
+function ResetButton({
+  onClick,
+  disabled,
+}: {
+  onClick: () => void
+  disabled: boolean
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="shrink-0 rounded-md border border-border px-2 py-1 text-[10px] text-muted-foreground transition-colors hover:bg-muted disabled:opacity-40"
+    >
+      default
+    </button>
+  )
+}
+
 function Control({
   label,
   value,
@@ -54,6 +73,11 @@ export function DcfPanel({
       : summary.present_value_terminal / summary.enterprise_value
 
   const defaultWacc = valuation.engine?.base_wacc ?? null
+  const latestYear = valuation.history[valuation.history.length - 1]
+  const filingCapexRate =
+    latestYear && latestYear.revenue
+      ? latestYear.capital_expenditures / latestYear.revenue
+      : null
 
   return (
     <div className="space-y-4">
@@ -146,6 +170,120 @@ export function DcfPanel({
               >
                 default
               </button>
+            </div>
+          </Control>
+
+          <Control
+            label="Growth (year 1)"
+            value={pct((search.growth ?? assumptions.growth_rate * 100) / 100)}
+          >
+            <div className="flex items-center gap-2">
+              <div className="min-w-0 flex-1">
+                <Slider
+                  min={0}
+                  max={25}
+                  step={0.1}
+                  value={[search.growth ?? Math.round(assumptions.growth_rate * 1000) / 10]}
+                  onValueChange={(next) => {
+                    const raw = Array.isArray(next) ? next[0] : next
+                    if (typeof raw === "number") {
+                      onChange({ growth: Math.round(raw * 10) / 10 })
+                    }
+                  }}
+                />
+              </div>
+              <ResetButton
+                onClick={() => onChange({ growth: undefined })}
+                disabled={search.growth === undefined}
+              />
+            </div>
+          </Control>
+
+          <Control
+            label="Tax rate"
+            value={pct((search.tax ?? assumptions.tax_rate * 100) / 100)}
+          >
+            <div className="flex items-center gap-2">
+              <div className="min-w-0 flex-1">
+                <Slider
+                  min={0}
+                  max={40}
+                  step={0.5}
+                  value={[search.tax ?? Math.round(assumptions.tax_rate * 1000) / 10]}
+                  onValueChange={(next) => {
+                    const raw = Array.isArray(next) ? next[0] : next
+                    if (typeof raw === "number") {
+                      onChange({ tax: Math.round(raw * 10) / 10 })
+                    }
+                  }}
+                />
+              </div>
+              <ResetButton
+                onClick={() => onChange({ tax: undefined })}
+                disabled={search.tax === undefined}
+              />
+            </div>
+          </Control>
+
+          <Control
+            label="CapEx (% of revenue)"
+            value={
+              filingCapexRate === null
+                ? "n/a"
+                : pct((search.capex ?? filingCapexRate * 100) / 100)
+            }
+          >
+            <div className="flex items-center gap-2">
+              <div className="min-w-0 flex-1">
+                <Slider
+                  min={0}
+                  max={30}
+                  step={0.5}
+                  disabled={filingCapexRate === null}
+                  value={[search.capex ?? Math.round(filingCapexRate! * 1000) / 10]}
+                  onValueChange={(next) => {
+                    const raw = Array.isArray(next) ? next[0] : next
+                    if (typeof raw === "number") {
+                      onChange({ capex: Math.round(raw * 10) / 10 })
+                    }
+                  }}
+                />
+              </div>
+              <ResetButton
+                onClick={() => onChange({ capex: undefined })}
+                disabled={search.capex === undefined}
+              />
+            </div>
+          </Control>
+
+          <Control
+            label="Shares outstanding (M)"
+            value={
+              (
+                (search.shares ?? (valuation.engine?.shares_outstanding ?? 0) / 1_000_000) /
+                1
+              ).toFixed(1)
+            }
+          >
+            <div className="flex items-center gap-2">
+              <Input
+                type="number"
+                min={1}
+                step={1}
+                placeholder="engine"
+                value={search.shares ?? ""}
+                onChange={(event) => {
+                  const raw = event.target.value
+                  onChange({
+                    shares: raw === "" ? undefined : Number(raw),
+                  })
+                }}
+                className="h-8"
+              />
+              <ResetButton
+                onClick={() => onChange({ shares: undefined })}
+                disabled={search.shares === undefined}
+              />
             </div>
           </Control>
         </div>
