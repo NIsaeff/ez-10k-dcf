@@ -127,6 +127,7 @@ uv run python -m scripts.analyze_all        # all 9 tickers
 - [`docs/capstone-plan.md`](docs/capstone-plan.md)
 - [`docs/valuation-spec.md`](docs/valuation-spec.md)
 - [`docs/qa-report.md`](docs/qa-report.md)
+- [`docs/backlog.md`](docs/backlog.md) — understood but unscheduled work
 
 ## Reference
 
