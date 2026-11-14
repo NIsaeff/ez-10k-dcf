@@ -25,6 +25,7 @@ function FilingPage() {
   const [loading, setLoading] = useState(true)
   const [active, setActive] = useState<FilingClaim | null>(null)
   const [elapsed, setElapsed] = useState(0)
+  const [overrides, setOverrides] = useState<Record<string, string>>({})
 
   useEffect(() => {
     let cancelled = false
@@ -62,11 +63,46 @@ function FilingPage() {
   }, [ticker])
 
   useEffect(() => {
+    if (!data) {
+      setOverrides({})
+      return
+    }
+    try {
+      const stored = localStorage.getItem(`ez10k-claim-overrides:${data.accession}`)
+      setOverrides(
+        stored ? (JSON.parse(stored) as Record<string, string>) : {},
+      )
+    } catch {
+      setOverrides({})
+    }
+  }, [data])
+
+  useEffect(() => {
     if (!active || active.block === null) return
     document
       .getElementById(`block-${active.block}`)
       ?.scrollIntoView({ behavior: "smooth", block: "center" })
   }, [active])
+
+  const persistOverrides = (next: Record<string, string>) => {
+    if (data) {
+      localStorage.setItem(
+        `ez10k-claim-overrides:${data.accession}`,
+        JSON.stringify(next),
+      )
+    }
+    setOverrides(next)
+  }
+
+  const saveOverride = (claim: FilingClaim, statement: string) => {
+    persistOverrides({ ...overrides, [claim.id]: statement })
+  }
+
+  const resetOverride = (claim: FilingClaim) => {
+    const next = { ...overrides }
+    delete next[claim.id]
+    persistOverrides(next)
+  }
 
   const jumpToClaim = (claim: FilingClaim) => setActive(claim)
   const claims = data?.claims ?? []
@@ -128,6 +164,9 @@ function FilingPage() {
               <span className="text-[11px] text-muted-foreground">
                 {claims.length} themes · {childCount} supporting statements ·{" "}
                 {verifiedCount} quoted verbatim
+                {Object.keys(overrides).length > 0
+                  ? ` · ${Object.keys(overrides).length} edited`
+                  : ""}
               </span>
               {data.cached ? (
                 <span className="rounded-full border border-border/60 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-muted-foreground">
@@ -152,7 +191,10 @@ function FilingPage() {
             <ClaimTree
               claims={claims}
               activeId={active?.id ?? null}
+              overrides={overrides}
               onJump={jumpToClaim}
+              onSave={saveOverride}
+              onReset={resetOverride}
             />
           </section>
 
