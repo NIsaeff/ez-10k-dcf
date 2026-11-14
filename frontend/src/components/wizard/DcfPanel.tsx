@@ -15,9 +15,11 @@ import {
   StanceChip,
 } from "@/components/wizard/GrowthEvidence"
 import { SensitivityGrid } from "@/components/wizard/SensitivityGrid"
+import { Modal } from "@/components/ui/modal"
 import { Slider } from "@/components/ui/slider"
 import { Input } from "@/components/ui/input"
 import type { AssumptionReview, SensitivityGrid as Grid } from "@/lib/api"
+import type { ProposalChange } from "@/lib/chat"
 import type { ValuationResult } from "@/lib/chat"
 import { buildBreakdownLines } from "@/lib/derivation"
 import { compact, pct, perShare } from "@/lib/format"
@@ -45,19 +47,95 @@ function ResetButton({
 function Control({
   label,
   value,
+  change,
+  onApply,
+  onDiscard,
   children,
 }: {
   label: string
   value: string
+  change?: ProposalChange | null
+  onApply?: () => void
+  onDiscard?: () => void
   children: React.ReactNode
 }) {
   return (
-    <div className="space-y-1.5">
+    <div
+      className={
+        change
+          ? `rounded-lg border p-2.5 ${confidenceClasses(change.confidence)}`
+          : "space-y-1.5"
+      }
+    >
       <div className="flex items-baseline justify-between">
         <span className="text-xs text-muted-foreground">{label}</span>
         <span className="text-xs font-medium tabular-nums">{value}</span>
       </div>
       {children}
+      {change && onApply && onDiscard ? (
+        <ChangeFooter change={change} onApply={onApply} onDiscard={onDiscard} />
+      ) : null}
+    </div>
+  )
+}
+
+function ChangeFooter({
+  change,
+  onApply,
+  onDiscard,
+}: {
+  change: ProposalChange
+  onApply: () => void
+  onDiscard: () => void
+}) {
+  return (
+    <div className="mt-1 flex items-center gap-1.5 text-[10px]">
+      <span className="tabular-nums text-muted-foreground">
+        {formatChangeValue(change.key, change.before)} →{" "}
+        <span className="font-medium text-foreground">
+          {formatChangeValue(change.key, change.after)}
+        </span>
+      </span>
+      <button
+        type="button"
+        onClick={onApply}
+        aria-label="Apply proposed change"
+        className="flex size-5 items-center justify-center rounded-md border border-emerald-600/50 bg-emerald-500/10 text-[11px] text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-300"
+      >
+        ✓
+      </button>
+      <button
+        type="button"
+        onClick={onDiscard}
+        aria-label="Discard proposed change"
+        className="flex size-5 items-center justify-center rounded-md border border-red-500/40 text-[11px] text-red-600 hover:bg-red-500/10 dark:text-red-400"
+      >
+        ✗
+      </button>
+    </div>
+  )
+}
+
+function ProposedFrame({
+  change,
+  onApply,
+  onDiscard,
+  children,
+}: {
+  change: ProposalChange | null
+  onApply: () => void
+  onDiscard: () => void
+  children: React.ReactNode
+}) {
+  if (!change) return <>{children}</>
+  return (
+    <div className={`rounded-lg border p-2.5 ${confidenceClasses(change.confidence)}`}>
+      {children}
+      <ChangeFooter
+        change={change}
+        onApply={onApply}
+        onDiscard={onDiscard}
+      />
     </div>
   )
 }
@@ -80,6 +158,15 @@ export function DcfPanel({
   const [evidenceOpen, setEvidenceOpen] = useState(false)
   const { active: activeProposal, apply: applyProposal, discard: discardProposal } =
     useChatPanel()
+  const changeFor = (key: string) =>
+    activeProposal?.proposal.changes.find((change) => change.key === key) ?? null
+  const growthChange = changeFor("growth")
+  const applyActive = () => {
+    if (activeProposal) applyProposal(activeProposal)
+  }
+  const discardActive = () => {
+    if (activeProposal) discardProposal(activeProposal)
+  }
   const summary = valuation.valuation
   const assumptions = valuation.assumptions
   const pvFcff = valuation.projection.reduce(
@@ -108,64 +195,14 @@ export function DcfPanel({
           </span>
         </div>
 
-        {activeProposal ? (
-          <div
-            className={`mt-3 rounded-lg border p-2.5 ${confidenceClasses(activeProposal.proposal.confidence)}`}
-          >
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-[11px] font-medium">
-                Proposed · {activeProposal.proposal.title}
-              </p>
-              <span className="text-[9px] uppercase tracking-wide text-muted-foreground">
-                {Math.round(activeProposal.proposal.confidence * 100)}% sure
-              </span>
-            </div>
-            <div className="mt-1 space-y-0.5">
-              {activeProposal.proposal.changes.map((change) => (
-                <div
-                  key={change.key}
-                  className="flex items-baseline gap-1.5 text-[11px]"
-                >
-                  <span className="text-muted-foreground">{change.label}</span>
-                  <span className="tabular-nums text-muted-foreground">
-                    {formatChangeValue(change.key, change.before)}
-                  </span>
-                  <span className="text-muted-foreground">→</span>
-                  <span className="font-medium tabular-nums">
-                    {formatChangeValue(change.key, change.after)}
-                  </span>
-                </div>
-              ))}
-            </div>
-            <div className="mt-1.5 flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => applyProposal(activeProposal)}
-                aria-label="Apply proposed changes"
-                className="flex size-5 items-center justify-center rounded-md border border-emerald-600/50 bg-emerald-500/10 text-[11px] text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-300"
-              >
-                ✓
-              </button>
-              <button
-                type="button"
-                onClick={() => discardProposal(activeProposal)}
-                aria-label="Discard proposed changes"
-                className="flex size-5 items-center justify-center rounded-md border border-red-500/40 text-[11px] text-red-600 hover:bg-red-500/10 dark:text-red-400"
-              >
-                ✗
-              </button>
-              {activeProposal.proposal.impact ? (
-                <span className="ml-auto text-[10px] text-muted-foreground tabular-nums">
-                  ${activeProposal.proposal.impact.value_before.toFixed(2)} → $
-                  {activeProposal.proposal.impact.value_after.toFixed(2)}
-                </span>
-              ) : null}
-            </div>
-          </div>
-        ) : null}
-
         <div className="mt-3 grid gap-4 sm:grid-cols-2">
-          <Control label="Projection years" value={`${search.years}`}>
+          <Control
+            label="Projection years"
+            value={`${search.years}`}
+            change={changeFor("years")}
+            onApply={applyActive}
+            onDiscard={discardActive}
+          >
             <Slider
               min={3}
               max={10}
@@ -183,6 +220,9 @@ export function DcfPanel({
           <Control
             label="Terminal growth"
             value={pct(assumptions.terminal_growth_rate)}
+            change={changeFor("terminal")}
+            onApply={applyActive}
+            onDiscard={discardActive}
           >
             <Slider
               min={1}
@@ -201,6 +241,9 @@ export function DcfPanel({
           <Control
             label="Growth model"
             value={search.model === "fade" ? "fade to terminal" : "constant"}
+            change={changeFor("model")}
+            onApply={applyActive}
+            onDiscard={discardActive}
           >
             <div className="flex gap-1.5">
               {(["fade", "constant"] as const).map((model) => (
@@ -220,7 +263,13 @@ export function DcfPanel({
             </div>
           </Control>
 
-          <Control label="WACC (override)" value={pct(assumptions.wacc)}>
+          <Control
+            label="WACC (override)"
+            value={pct(assumptions.wacc)}
+            change={changeFor("wacc")}
+            onApply={applyActive}
+            onDiscard={discardActive}
+          >
             <div className="flex items-center gap-2">
               <Input
                 type="number"
@@ -254,18 +303,17 @@ export function DcfPanel({
             aria-label={
               growthReview ? "What the filing says about growth" : undefined
             }
-            aria-expanded={growthReview ? evidenceOpen : undefined}
-            onClick={() => growthReview && setEvidenceOpen((current) => !current)}
+            onClick={() => growthReview && setEvidenceOpen(true)}
             onKeyDown={(event) => {
               if (!growthReview) return
               if (event.key === "Enter" || event.key === " ") {
                 event.preventDefault()
-                setEvidenceOpen((current) => !current)
+                setEvidenceOpen(true)
               }
             }}
             className={`group relative rounded-lg border p-2.5 transition-colors ${
-              evidenceOpen
-                ? "border-primary/50 bg-muted/40 ring-1 ring-primary/20"
+              growthChange
+                ? confidenceClasses(growthChange.confidence)
                 : "border-border/60 bg-muted/20"
             } ${
               growthReview
@@ -310,12 +358,27 @@ export function DcfPanel({
               />
             </div>
 
+            {growthChange ? (
+              <div
+                onClick={(event) => event.stopPropagation()}
+                className="mt-1"
+              >
+                <ChangeFooter
+                  change={growthChange}
+                  onApply={() => activeProposal && applyProposal(activeProposal)}
+                  onDiscard={() =>
+                    activeProposal && discardProposal(activeProposal)
+                  }
+                />
+              </div>
+            ) : null}
+
             {growthReview ? (
               <button
                 type="button"
                 onClick={(event) => {
                   event.stopPropagation()
-                  setEvidenceOpen((current) => !current)
+                  setEvidenceOpen(true)
                 }}
                 className="mt-1.5 inline-flex items-center gap-1 pr-8 text-[10px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
               >
@@ -323,19 +386,6 @@ export function DcfPanel({
               </button>
             ) : null}
 
-            {evidenceOpen && growthReview ? (
-              <div
-                className="mt-2 border-t border-border/60 pt-2"
-                onClick={(event) => event.stopPropagation()}
-                onKeyDown={(event) => event.stopPropagation()}
-              >
-                <GrowthEvidenceContent
-                  review={growthReview}
-                  ticker={valuation.ticker}
-                  onApply={(percent) => onChange({ growth: percent })}
-                />
-              </div>
-            ) : null}
 
             {growthReview ? (
               <span
@@ -345,7 +395,7 @@ export function DcfPanel({
                 <HugeiconsIcon
                   icon={ArrowUpRight01Icon}
                   strokeWidth={2}
-                  className={`size-3 transition-transform ${evidenceOpen ? "rotate-90" : ""}`}
+                  className="size-3"
                 />
               </span>
             ) : null}
@@ -354,6 +404,9 @@ export function DcfPanel({
           <Control
             label="Tax rate"
             value={pct((search.tax ?? assumptions.tax_rate * 100) / 100)}
+            change={changeFor("tax")}
+            onApply={applyActive}
+            onDiscard={discardActive}
           >
             <div className="flex items-center gap-2">
               <div className="min-w-0 flex-1">
@@ -379,6 +432,9 @@ export function DcfPanel({
 
           <Control
             label="CapEx (% of revenue)"
+            change={changeFor("capex")}
+            onApply={applyActive}
+            onDiscard={discardActive}
             value={
               filingCapexRate === null
                 ? "n/a"
@@ -410,6 +466,9 @@ export function DcfPanel({
 
           <Control
             label="Shares outstanding (M)"
+            change={changeFor("shares")}
+            onApply={applyActive}
+            onDiscard={discardActive}
             value={
               (
                 (search.shares ?? (valuation.engine?.shares_outstanding ?? 0) / 1_000_000) /
@@ -516,6 +575,23 @@ export function DcfPanel({
         </div>
       </section>
 
+      {growthReview ? (
+        <Modal
+          open={evidenceOpen}
+          onClose={() => setEvidenceOpen(false)}
+          title="What the filing says about growth"
+          subtitle={`${valuation.ticker} · engine ${pct(assumptions.growth_rate)} · ${assumptions.growth_source.replaceAll("_", " ")}`}
+        >
+          <GrowthEvidenceContent
+            review={growthReview}
+            ticker={valuation.ticker}
+            onApply={(percent) => {
+              onChange({ growth: percent })
+              setEvidenceOpen(false)
+            }}
+          />
+        </Modal>
+      ) : null}
     </div>
   )
 }
