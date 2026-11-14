@@ -9,9 +9,11 @@ import { FcffPanel } from "@/components/wizard/FcffPanel"
 import { TickerSearch } from "@/components/wizard/TickerSearch"
 import { WaccPanel } from "@/components/wizard/WaccPanel"
 import {
+  fetchAssumptions,
   fetchSensitivity,
   fetchWacc,
   recalcDcf,
+  type AssumptionReview,
   type SensitivityGrid,
   type WaccBreakdown,
 } from "@/lib/api"
@@ -38,6 +40,8 @@ function WizardPage() {
   const [valuation, setValuation] = useState<ValuationResult | null>(null)
   const [grid, setGrid] = useState<SensitivityGrid | null>(null)
   const [waccData, setWaccData] = useState<WaccBreakdown | null>(null)
+  const [assumptionReview, setAssumptionReview] =
+    useState<AssumptionReview | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState(true)
 
@@ -86,6 +90,23 @@ function WizardPage() {
       })
       .catch(() => {
         if (!cancelled) setWaccData(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [ticker])
+
+  useEffect(() => {
+    let cancelled = false
+    setAssumptionReview(null)
+    fetchAssumptions(ticker)
+      .then((response) => {
+        if (cancelled) return
+        const growth = response.reviews.find((item) => item.key === "growth_rate")
+        setAssumptionReview(growth ?? null)
+      })
+      .catch(() => {
+        if (!cancelled) setAssumptionReview(null)
       })
     return () => {
       cancelled = true
@@ -213,6 +234,7 @@ function WizardPage() {
                   onChange={update}
                   grid={grid}
                   pending={pending}
+                  growthReview={assumptionReview}
                 />
               </TabsContent>
             </Tabs>

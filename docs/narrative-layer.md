@@ -1,6 +1,6 @@
 # Narrative layer — using the 10-K prose
 
-Status: recommendations captured 2026-11-14; P0 shipped 2026-11-14 (`/filing`).
+Status: recommendations captured 2026-11-14; P0 and the P1 growth pilot shipped 2026-11-14.
 Scope: everything *interpretive* about a filing, kept separate from the
 deterministic valuation engine.
 
@@ -52,7 +52,22 @@ UI: nested dropdowns (section → parent claim → child claim), each leaf with 
 "jump to source" action that scrolls a same-origin document viewer to the block
 and highlights the exact range.
 
-### P1 — Assumption interrogation
+### P1 — Assumption interrogation *(growth pilot shipped)*
+
+Implemented for one assumption, `growth_rate`:
+
+- `app/services/assumptions.py` asks the model to select claims by id (never to
+  write them) and to return a stance, a directional lean, and an optional range.
+  Only ids that exist in the ledger and carry a quote survive.
+- `GET /api/assumptions/{ticker}` returns the review; cached per accession.
+- The wizard's DCF panel renders the evidence under the growth slider with
+  "view in filing" links (`/filing?ticker=KO&claim=<id>`) and an Apply button
+  when a range is grounded.
+- Filings rarely quantify FCFF growth, so KO and AAPL both come back
+  `context_only` with no range — the card then reports stance, lean and
+  evidence rather than inventing a number. CapEx is the better second
+  assumption for numeric suggestions ("we expect capital expenditures of
+  approximately $2.2 billion").
 
 For each assumption the engine makes, gather the filing's language for and
 against it: growth (guidance, backlog, pricing), terminal growth (market

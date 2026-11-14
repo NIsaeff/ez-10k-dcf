@@ -72,6 +72,34 @@ export type FilingAnalysis = {
   cached: boolean
 }
 
+export type AssumptionEvidence = {
+  claim_id: string
+  statement: string
+  quote: string | null
+  section: string | null
+  verified: boolean
+}
+
+export type AssumptionReview = {
+  key: string
+  label: string
+  engine_value: number
+  engine_source: string
+  stance: "supported" | "challenged" | "context_only"
+  lean: "higher" | "lower" | "neutral" | null
+  suggested_range: number[] | null
+  rationale: string | null
+  evidence: AssumptionEvidence[]
+}
+
+export type AssumptionReviewResponse = {
+  ticker: string
+  accession: string
+  reviews: AssumptionReview[]
+  flags: string[]
+  cached: boolean
+}
+
 export type WaccInput = {
   key: string
   label: string
@@ -165,6 +193,14 @@ export function searchTickers(
 
 export function fetchFiling(ticker: string): Promise<FilingAnalysis> {
   return request<FilingAnalysis>(`/api/filing/${encodeURIComponent(ticker)}`)
+}
+
+export function fetchAssumptions(
+  ticker: string,
+): Promise<AssumptionReviewResponse> {
+  return request<AssumptionReviewResponse>(
+    `/api/assumptions/${encodeURIComponent(ticker)}`,
+  )
 }
 
 export function fetchWacc(ticker: string): Promise<WaccBreakdown> {

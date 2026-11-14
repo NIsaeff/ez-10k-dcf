@@ -213,6 +213,34 @@ class FilingAnalysis(BaseModel):
     cached: bool = False
 
 
+class AssumptionEvidence(BaseModel):
+    claim_id: str
+    statement: str
+    quote: str | None = None
+    section: str | None = None
+    verified: bool = False
+
+
+class AssumptionReview(BaseModel):
+    key: str
+    label: str
+    engine_value: float
+    engine_source: str
+    stance: Literal["supported", "challenged", "context_only"]
+    lean: Literal["higher", "lower", "neutral"] | None = None
+    suggested_range: list[float] | None = None
+    rationale: str | None = None
+    evidence: list[AssumptionEvidence] = Field(default_factory=list)
+
+
+class AssumptionReviewResponse(BaseModel):
+    ticker: str
+    accession: str
+    reviews: list[AssumptionReview]
+    flags: list[str] = Field(default_factory=list)
+    cached: bool = False
+
+
 class TickerSuggestion(BaseModel):
     ticker: str
     name: str

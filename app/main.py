@@ -8,6 +8,8 @@ from fastapi.staticfiles import StaticFiles
 from app import llm
 from app.config import settings
 from app.schemas import (
+    AssumptionReview,
+    AssumptionReviewResponse,
     ChatRequest,
     ChatResponse,
     ClaimNode,
@@ -23,6 +25,9 @@ from app.schemas import (
     TickerSuggestion,
     ValuationResult,
     WaccBreakdown,
+)
+from app.services import (
+    assumptions as assumptions_service,
 )
 from app.services import (
     claims as claims_service,
@@ -131,6 +136,108 @@ FILING_VIEW_CSP = (
     "base-uri https://www.sec.gov; "
     "form-action 'none'"
 )
+
+
+@app.get("/api/assumptions/{ticker}", response_model=AssumptionReviewResponse)
+def assumption_review(ticker: str):
+    """Review one engine assumption against the filing's claim ledger (P1 pilot)."""
+    ticker = ticker.upper().strip()
+    try:
+        info = edgar.company_info(ticker)
+        cik = f"{int(info['cik']):010d}"
+        meta = edgar.latest_10k(int(info["cik"]))
+    except KeyError:
+        return JSONResponse(
+            status_code=422,
+            content=ErrorResponse(
+                error="unsupported_ticker",
+                ticker=ticker,
+                detail="Ticker not found in SEC company_tickers.json",
+            ).model_dump(),
+        )
+    except ValueError as exc:
+        return JSONResponse(
+            status_code=422,
+            content=ErrorResponse(
+                error="no_annual_report", ticker=ticker, detail=str(exc)
+            ).model_dump(),
+        )
+    except Exception as exc:  # noqa: BLE001 - upstream failure envelope
+        return JSONResponse(
+            status_code=502,
+            content=ErrorResponse(
+                error="upstream_error",
+                ticker=ticker,
+                detail=f"{type(exc).__name__}: {exc}",
+            ).model_dump(),
+        )
+
+    accession = meta["accession_number"]
+    cached = assumptions_service.load_cached(accession)
+    if cached is not None:
+        return AssumptionReviewResponse(
+            ticker=ticker,
+            accession=accession,
+            reviews=[AssumptionReview(**review) for review in cached.get("reviews", [])],
+            flags=list(cached.get("flags", [])) + ["review_cached"],
+            cached=True,
+        )
+
+    flags: list[str] = []
+    try:
+        valuation_result = valuation.analyze(ticker, allow_any=True)
+    except Exception as exc:  # noqa: BLE001 - review needs the engine value
+        return JSONResponse(
+            status_code=422,
+            content=ErrorResponse(
+                error="insufficient_data",
+                ticker=ticker,
+                detail=f"{type(exc).__name__}: {exc}",
+            ).model_dump(),
+        )
+
+    claim_payload = filing_service.load_cached_claims(accession)
+    if claim_payload is None or claim_payload.get("version") != claims_service.PROMPT_VERSION:
+        try:
+            parsed = filing_service.load(cik, accession, meta["document"])
+            claim_dicts, claim_flags = claims_service.extract(parsed)
+            filing_service.save_cached_claims(
+                accession, claims_service.cache_payload(claim_dicts, claim_flags)
+            )
+            flags.extend(claim_flags)
+        except Exception as exc:  # noqa: BLE001 - claims are prerequisites
+            return JSONResponse(
+                status_code=502,
+                content=ErrorResponse(
+                    error="claims_unavailable",
+                    ticker=ticker,
+                    detail=f"{type(exc).__name__}: {exc}",
+                ).model_dump(),
+            )
+    else:
+        claim_dicts = claim_payload.get("claims", [])
+
+    review = assumptions_service.review_growth(
+        claim_dicts,
+        engine_value=valuation_result.assumptions.growth_rate,
+        engine_source=valuation_result.assumptions.growth_source,
+    )
+    reviews = [review] if review else []
+    if review is None:
+        flags.append("review_unavailable")
+
+    assumptions_service.save_cached(
+        accession,
+        {"version": assumptions_service.REVIEW_VERSION, "reviews": reviews, "flags": flags},
+    )
+
+    return AssumptionReviewResponse(
+        ticker=ticker,
+        accession=accession,
+        reviews=[AssumptionReview(**item) for item in reviews],
+        flags=flags,
+        cached=False,
+    )
 
 
 @app.get("/api/filing/{ticker}/document", include_in_schema=False)

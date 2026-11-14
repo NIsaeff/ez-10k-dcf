@@ -1,9 +1,10 @@
 import { BreakdownChain } from "@/components/valuation/BreakdownChain"
 import { MetricGrid } from "@/components/valuation/MetricGrid"
+import { GrowthEvidence } from "@/components/wizard/GrowthEvidence"
 import { SensitivityGrid } from "@/components/wizard/SensitivityGrid"
 import { Slider } from "@/components/ui/slider"
 import { Input } from "@/components/ui/input"
-import type { SensitivityGrid as Grid } from "@/lib/api"
+import type { AssumptionReview, SensitivityGrid as Grid } from "@/lib/api"
 import type { ValuationResult } from "@/lib/chat"
 import { buildBreakdownLines } from "@/lib/derivation"
 import { compact, pct, perShare } from "@/lib/format"
@@ -54,12 +55,14 @@ export function DcfPanel({
   onChange,
   grid,
   pending,
+  growthReview,
 }: {
   valuation: ValuationResult
   search: WizardSearch
   onChange: (patch: Partial<WizardSearch>) => void
   grid: Grid | null
   pending: boolean
+  growthReview: AssumptionReview | null
 }) {
   const summary = valuation.valuation
   const assumptions = valuation.assumptions
@@ -287,6 +290,14 @@ export function DcfPanel({
             </div>
           </Control>
         </div>
+
+        {growthReview ? (
+          <GrowthEvidence
+            review={growthReview}
+            ticker={valuation.ticker}
+            onApply={(percent) => onChange({ growth: percent })}
+          />
+        ) : null}
       </section>
 
       <section className="rounded-xl border bg-card p-4 text-card-foreground shadow-sm">

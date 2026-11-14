@@ -14,12 +14,13 @@ import { normalizeTicker } from "@/lib/wizard-state"
 export const Route = createFileRoute("/filing")({
   validateSearch: (search: Record<string, unknown>) => ({
     ticker: normalizeTicker(search.ticker),
+    claim: typeof search.claim === "string" ? search.claim : undefined,
   }),
   component: FilingPage,
 })
 
 function FilingPage() {
-  const { ticker } = Route.useSearch()
+  const { ticker, claim: claimParam } = Route.useSearch()
   const navigate = Route.useNavigate()
 
   const [data, setData] = useState<FilingAnalysis | null>(null)
@@ -84,6 +85,20 @@ function FilingPage() {
   }, [data])
 
   useEffect(() => {
+    if (!data || !claimParam) return
+    const find = (nodes: FilingClaim[]): FilingClaim | null => {
+      for (const node of nodes) {
+        if (node.id === claimParam) return node
+        const nested = find(node.children)
+        if (nested) return nested
+      }
+      return null
+    }
+    const match = find(data.claims)
+    if (match) setActive(match)
+  }, [data, claimParam])
+
+  useEffect(() => {
     if (!active || active.block === null) return
     document
       .getElementById(`block-${active.block}`)
@@ -139,7 +154,7 @@ function FilingPage() {
             onSelect={(next) =>
               navigate({
                 to: "/filing",
-                search: { ticker: next },
+                search: { ticker: next, claim: undefined },
                 replace: true,
               })
             }
