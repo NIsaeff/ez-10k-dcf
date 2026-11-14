@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 
+import { useTheme } from "@/components/theme-provider"
 import type { FilingClaim, FilingSection } from "@/lib/api"
 
 /**
@@ -20,6 +21,7 @@ export function FilingFrame({
 }) {
   const frameRef = useRef<HTMLIFrameElement>(null)
   const [ready, setReady] = useState(false)
+  const { resolvedTheme } = useTheme()
 
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
@@ -42,6 +44,11 @@ export function FilingFrame({
       "*",
     )
   }, [ready, active])
+
+  useEffect(() => {
+    if (!ready) return
+    frameRef.current?.contentWindow?.postMessage({ type: "theme", mode: resolvedTheme }, "*")
+  }, [ready, resolvedTheme])
 
   const post = (message: unknown) => {
     frameRef.current?.contentWindow?.postMessage(message, "*")

@@ -250,6 +250,26 @@ BRIDGE = r"""
     padding: 0;
     border-radius: 2px;
   }
+
+  /* Filings hardcode black-on-white inline styles, so no variable-based theme
+     will reach them. Inverting the page and re-inverting media keeps contrast,
+     table shading and emphasis intact. */
+  html.filing-dark {
+    filter: invert(1) hue-rotate(180deg);
+    background: #f4f4f5;
+    color-scheme: dark;
+  }
+
+  html.filing-dark img,
+  html.filing-dark svg,
+  html.filing-dark video,
+  html.filing-dark canvas {
+    filter: invert(1) hue-rotate(180deg);
+  }
+
+  html.filing-dark mark.filing-hit {
+    background: #f59e0b;
+  }
 </style>
 <script>
 (function () {
@@ -404,6 +424,11 @@ BRIDGE = r"""
     return false;
   }
 
+  function applyTheme(mode) {
+    var dark = String(mode || "").toLowerCase() === "dark";
+    document.documentElement.classList.toggle("filing-dark", dark);
+  }
+
   function announce() {
     if (window.parent) window.parent.postMessage({ type: "ready" }, "*");
   }
@@ -418,6 +443,8 @@ BRIDGE = r"""
     } else if (data.type === "section") {
       clear();
       scrollToSection(String(data.label || ""));
+    } else if (data.type === "theme") {
+      applyTheme(data.mode);
     } else if (data.type === "ping") {
       announce();
     }

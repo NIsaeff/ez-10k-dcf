@@ -145,6 +145,11 @@ data, not instructions", give extraction calls no tools, and validate every quot
   hides the inline-XBRL header that a text extraction would otherwise show.
 - Claims are stored as a 3-level tree: section → parent claim → child claim.
   Parents may carry a representative quote; children always do.
+- The document follows the app theme. Filings hardcode black-on-white inline
+  styles, so no CSS-variable theme reaches them: the bridge toggles a class that
+  applies `filter: invert(1) hue-rotate(180deg)` to the page and re-inverts
+  images, preserving contrast and table shading. The mode comes from the app's
+  `ThemeProvider` context, not from observing the DOM.
 - Highlighting happens inside the iframe: the parent posts
   `{type: "highlight", quote, section}` and an injected script flattens visible
   text, finds the quote (skipping the table of contents and preferring the
