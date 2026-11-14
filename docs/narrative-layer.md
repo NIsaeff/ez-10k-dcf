@@ -60,9 +60,9 @@ Implemented for one assumption, `growth_rate`:
   write them) and to return a stance, a directional lean, and an optional range.
   Only ids that exist in the ledger and carry a quote survive.
 - `GET /api/assumptions/{ticker}` returns the review; cached per accession.
-- The wizard's DCF panel renders the evidence under the growth slider with
-  "view in filing" links (`/filing?ticker=KO&claim=<id>`) and an Apply button
-  when a range is grounded.
+- The wizard's DCF panel renders the evidence **inline inside the growth card**
+  (expand/collapse, highlighted while open) with "view in filing" links
+  (`/filing?ticker=KO&claim=<id>`) and an Apply button when a range is grounded.
 - Filings rarely quantify FCFF growth, so KO and AAPL both come back
   `context_only` with no range — the card then reports stance, lean and
   evidence rather than inventing a number. CapEx is the better second

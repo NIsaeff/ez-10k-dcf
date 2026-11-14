@@ -15,7 +15,6 @@ import {
   StanceChip,
 } from "@/components/wizard/GrowthEvidence"
 import { SensitivityGrid } from "@/components/wizard/SensitivityGrid"
-import { Modal } from "@/components/ui/modal"
 import { Slider } from "@/components/ui/slider"
 import { Input } from "@/components/ui/input"
 import type { AssumptionReview, SensitivityGrid as Grid } from "@/lib/api"
@@ -253,19 +252,24 @@ export function DcfPanel({
             role={growthReview ? "button" : undefined}
             tabIndex={growthReview ? 0 : undefined}
             aria-label={
-              growthReview ? "Open what the filing says about growth" : undefined
+              growthReview ? "What the filing says about growth" : undefined
             }
-            onClick={() => growthReview && setEvidenceOpen(true)}
+            aria-expanded={growthReview ? evidenceOpen : undefined}
+            onClick={() => growthReview && setEvidenceOpen((current) => !current)}
             onKeyDown={(event) => {
               if (!growthReview) return
               if (event.key === "Enter" || event.key === " ") {
                 event.preventDefault()
-                setEvidenceOpen(true)
+                setEvidenceOpen((current) => !current)
               }
             }}
-            className={`group relative rounded-lg border border-border/60 bg-muted/20 p-2.5 ${
+            className={`group relative rounded-lg border p-2.5 transition-colors ${
+              evidenceOpen
+                ? "border-primary/50 bg-muted/40 ring-1 ring-primary/20"
+                : "border-border/60 bg-muted/20"
+            } ${
               growthReview
-                ? "cursor-pointer transition-colors hover:border-primary/40 hover:bg-muted/40 focus-visible:border-primary/50 focus-visible:outline-none"
+                ? "cursor-pointer hover:border-primary/40 hover:bg-muted/40 focus-visible:border-primary/50 focus-visible:outline-none"
                 : ""
             }`}
           >
@@ -311,12 +315,26 @@ export function DcfPanel({
                 type="button"
                 onClick={(event) => {
                   event.stopPropagation()
-                  setEvidenceOpen(true)
+                  setEvidenceOpen((current) => !current)
                 }}
                 className="mt-1.5 inline-flex items-center gap-1 pr-8 text-[10px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
               >
                 What the filing says · {growthReview.evidence.length} claims
               </button>
+            ) : null}
+
+            {evidenceOpen && growthReview ? (
+              <div
+                className="mt-2 border-t border-border/60 pt-2"
+                onClick={(event) => event.stopPropagation()}
+                onKeyDown={(event) => event.stopPropagation()}
+              >
+                <GrowthEvidenceContent
+                  review={growthReview}
+                  ticker={valuation.ticker}
+                  onApply={(percent) => onChange({ growth: percent })}
+                />
+              </div>
             ) : null}
 
             {growthReview ? (
@@ -327,7 +345,7 @@ export function DcfPanel({
                 <HugeiconsIcon
                   icon={ArrowUpRight01Icon}
                   strokeWidth={2}
-                  className="size-3"
+                  className={`size-3 transition-transform ${evidenceOpen ? "rotate-90" : ""}`}
                 />
               </span>
             ) : null}
@@ -498,23 +516,6 @@ export function DcfPanel({
         </div>
       </section>
 
-      {growthReview ? (
-        <Modal
-          open={evidenceOpen}
-          onClose={() => setEvidenceOpen(false)}
-          title="What the filing says about growth"
-          subtitle={`${valuation.ticker} · engine ${pct(assumptions.growth_rate)} · ${assumptions.growth_source.replaceAll("_", " ")}`}
-        >
-          <GrowthEvidenceContent
-            review={growthReview}
-            ticker={valuation.ticker}
-            onApply={(percent) => {
-              onChange({ growth: percent })
-              setEvidenceOpen(false)
-            }}
-          />
-        </Modal>
-      ) : null}
     </div>
   )
 }
