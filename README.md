@@ -1,15 +1,6 @@
 # EZ-10k — Agentic DCF
 
-Capstone project for the Parsity Dev Accelerator: enter a ticker, pull the company's
-latest 10-K financials from SEC EDGAR, and compute a discounted cash flow valuation in
-the chat UI.
-
-**Status:** phases 1–8 complete (backend, DCF, SEC extraction, API, UI, QA, drill-down
-provenance, DCF Wizard). Submission artifacts (assignment writeup + demo video) remain.
-
-## Supported tickers
-
-`AAPL`, `MSFT`, `GOOGL`, `AMZN`, `NVDA`, `META`, `TSLA`, `KO`, `PWR`.
+enter a ticker, pull the company's latest 10-K financials from SEC EDGAR, and compute a discounted cash flow valuation in the chat UI. Currently Application only includes a couple tickers for now, the plan is to be fully compatible. `AAPL`, `MSFT`, `GOOGL`, `AMZN`, `NVDA`, `META`, `TSLA`, `KO`, `PWR`.
 
 Unknown tickers return a clear `422 unsupported_ticker` — no guessed valuation.
 
@@ -28,11 +19,14 @@ cp .env.example .env
 #   SEC_USER_AGENT="EZ-10k Capstone (you@example.com)"
 
 # 4. Run
-./scripts/dev-backend.sh
-# open http://localhost:8001 and type: value KO
-```
+./scripts/dev-backend.sh # or cd backend then uv run fastapi dev
 
-Frontend-only dev loop (HMR on the port in `.env`, proxy to the API port):
+# open http://localhost:8001 and type any question about investments or the stock market
+```
+# WARNING: DO NOT TAKE ANY INVESTMENT ADVICE FROM THIS APP, IT IS REALLY BAD AND DUMB
+(for now but still dont even if its good lol)
+
+Frontend-only dev loop (HMR (Hot Module Replacement) on the port in `.env`, proxy to the API port):
 
 ```bash
 ./scripts/dev-mcp.sh          # terminal 1 — FRED MCP sidecar, port from FRED_MCP_PORT
@@ -40,17 +34,16 @@ Frontend-only dev loop (HMR on the port in `.env`, proxy to the API port):
 cd frontend && bun run dev    # terminal 3 — UI, port from FRONTEND_PORT
 ```
 
-Ports are declared once in `.env`, so several worktrees can run side by side:
-
-```ini
-PORT=8001            # read directly by `fastapi dev` (its --port envvar)
-FRONTEND_PORT=5174   # read by vite.config.ts; strict, so a clash fails loudly
-```
-
 `uv run` does not read `.env` and `fastapi dev` resolves its port before any app
 code runs, so the wrapper just adds `--env-file .env`. The equivalent raw command is
 `uv run --env-file .env fastapi dev app/main.py`; the frontend needs no flag.
 `set -a; . ./.env; set +a` in a shell also makes the raw commands work.
+
+## What is a Discounted Cash Flow?
+
+Discounted Cash Flow (DCF) is a valuation technique to value any corporation, company, organization or even a particular project within an org to find its intrinsic value. It works by taking your own forcasts for future growth then discounting that growth based on how far in the future it is. You can think of "Discounting" as essentailly adjusting the price based on benchmarking future value relative to other opportunities, such as investing in "gauranteed" treasuries or bonds or other stocks or ventures. 
+
+The whole goal with this is to try to find the intrinsic or "true" value of something based on your own particular analysis or (non-insider) information and buy or hold if your value is larger thatn the markets or sell/not-buy if your value is smaller than the market's.
 
 ## How it works
 

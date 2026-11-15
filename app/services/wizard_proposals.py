@@ -115,7 +115,7 @@ def _validate_change(
 def effective_values(
     context: WizardContext, overrides: DcfOverrides | None = None
 ) -> tuple[dict[str, Any], float | None]:
-    """Current effective values, from the real engine, in wizard units."""
+    """Current effective values, from the real engine, in wizard units. WTF are Wizard units, AI Dummy"""
     overrides = overrides or overrides_from_context(context)
     try:
         result = valuation.analyze(context.ticker, overrides, allow_any=True)
