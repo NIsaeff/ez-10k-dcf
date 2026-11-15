@@ -6,6 +6,11 @@ on:
   pull_request:
   workflow_dispatch:
 
+# The repo default is already read-only; state it here so the workflow keeps
+# the minimum even if that default is ever relaxed.
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true

@@ -1,0 +1,36 @@
+# Dependency updates for the two ecosystems Dependabot can keep in sync here.
+#
+# Deliberately NOT covered: Python. There is no `uv` ecosystem, and the `pip`
+# ecosystem only edits pyproject.toml — it never regenerates `uv.lock`, which
+# would leave `uv sync --frozen` failing in CI. Python updates stay manual:
+#
+#   uv lock --upgrade && uv sync --directory backend && uv run --directory backend pytest -q
+#
+# Both entries are weekly and grouped, so a quiet week costs one PR each.
+
+version: 2
+
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "ci"
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: "bun"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "deps(frontend)"
+    # React, Vite and TanStack release often; patch/minor in one PR keeps the
+    # noise down, majors stay separate so they get read.
+    groups:
+      minor-and-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    open-pull-requests-limit: 5
