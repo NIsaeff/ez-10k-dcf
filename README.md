@@ -235,6 +235,21 @@ uv run --directory backend python -m scripts.analyze_all   # all 9 tickers
 production build are part of the gate as well. CI runs the same four commands on every
 push to `main` and every pull request (`.github/workflows/ci.yml`).
 
+`main` is protected: changes land through a pull request, both CI jobs are required,
+squash-merge only, no force-pushes and no deletions. A direct `git push` is refused
+server-side, so the habit is:
+
+```bash
+git switch -c feat/whatever
+# ...work...
+git push -u origin feat/whatever
+gh pr create --fill && gh pr merge --squash --delete-branch
+```
+
+Dependency updates are covered by Dependabot for `github-actions` and `bun`. Python is
+manual, because there is no `uv` ecosystem and the `pip` ecosystem can't regenerate
+`uv.lock`: `uv lock --upgrade`.
+
 ## Deployment
 
 Target platform is **Databricks Apps**, which builds from the repo and would serve the
