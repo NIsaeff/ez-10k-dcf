@@ -1,0 +1,9 @@
+# uv workspace root.
+#
+# Databricks Apps inspects a single app directory and runs its build steps from
+# there, so two things have to sit at the repo root: `pyproject.toml` + `uv.lock`
+# (for `uv sync`) and `package.json` (for the SPA build). The Python project
+# itself stays in `backend/` with its own pyproject.toml — this file only marks
+# the workspace and points at that member.
+[tool.uv.workspace]
+members = ["backend"]

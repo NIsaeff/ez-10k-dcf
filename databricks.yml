@@ -1,0 +1,50 @@
+# Declarative Automation Bundle for the Databricks Apps deployment.
+#
+#   databricks bundle validate -t prod --profile <profile>
+#   databricks bundle deploy   -t prod --profile <profile>
+#
+# The workspace host is not hardcoded: `--profile` (or DATABRICKS_HOST) decides
+# it, so the same bundle works for any workspace.
+
+bundle:
+  name: ez-10k-dcf
+
+variables:
+  app_name:
+    description: Databricks App name
+    default: ez-10k-dcf
+  secret_scope:
+    description: Scope holding OPENAI_API_KEY, FRED_API_KEY and SEC_USER_AGENT
+    default: ez-10k-dcf
+
+resources:
+  apps:
+    ez_10k_dcf:
+      name: ${var.app_name}
+      description: 'EZ-10k — agentic DCF valuation (SEC 10-K → deterministic engine → proposals)'
+      # Repo root, not backend/: Databricks only sees a root package.json, which
+      # is what triggers the SPA build. uv sync runs here via the workspace root.
+      source_code_path: ./
+
+      # Each entry becomes a `valueFrom` target in app.yaml. Granting the app's
+      # service principal READ on the scope is what lets it read the values.
+      resources:
+        - name: openai-api-key
+          secret_scope:
+            scope: ${var.secret_scope}
+            key: openai-api-key
+            permission: READ
+        - name: fred-api-key
+          secret_scope:
+            scope: ${var.secret_scope}
+            key: fred-api-key
+            permission: READ
+        - name: sec-user-agent
+          secret_scope:
+            scope: ${var.secret_scope}
+            key: sec-user-agent
+            permission: READ
+
+targets:
+  prod:
+    mode: production

@@ -1,0 +1,8 @@
+{
+  "name": "ez-10k-dcf",
+  "private": true,
+  "description": "Build shim. Databricks Apps only inspects a package.json at the app root, and the SPA lives in frontend/. Uses npm (guaranteed present in the build image) rather than bun, so the deploy never depends on a downloaded toolchain.",
+  "scripts": {
+    "build": "npm ci --prefix frontend --include=dev && npm run build --prefix frontend"
+  }
+}

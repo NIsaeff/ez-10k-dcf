@@ -7,6 +7,11 @@ resolution-markers = [
     "python_full_version < '3.13'",
 ]
 
+[manifest]
+members = [
+    "ten-k-dcf",
+]
+
 [[package]]
 name = "agent-detector"
 version = "2.0.0"
@@ -1912,7 +1917,7 @@ wheels = [
 [[package]]
 name = "ten-k-dcf"
 version = "0.1.0"
-source = { virtual = "." }
+source = { virtual = "backend" }
 dependencies = [
     { name = "fastapi", extra = ["standard"] },
     { name = "mcp" },

@@ -1,0 +1,39 @@
+# Databricks Apps execution config.
+#
+# The platform builds first (npm install → uv sync → npm run build) and only then
+# starts this command, which is what backend/app/main.py needs: it decides at
+# import time whether frontend/dist exists.
+#
+# Secrets are not written here — `valueFrom` resolves the resource keys declared
+# in databricks.yml, which point at the `ez-10k-dcf` secret scope.
+command: ['python', 'serve.py']
+
+health_check:
+  path: /api/health
+  timeout_seconds: 120
+
+env:
+  # Non-secret configuration.
+  - name: OPENAI_BASE_URL
+    value: 'https://parsity-litellm.fly.dev'
+  - name: LLM_MODEL
+    value: 'gpt-6-luna'
+
+  # Apps has an ephemeral filesystem; the repo tree itself may be read-only.
+  - name: DATA_DIR
+    value: '/tmp/ez10k'
+
+  # No Node at runtime: the chat's macro tools go over plain HTTPS through
+  # backend/app/services/macro.py instead of the fred-mcp-server sidecar.
+  - name: FRED_MCP_ENABLED
+    value: 'false'
+
+  # Secrets, from the scope attached as an app resource.
+  - name: OPENAI_API_KEY
+    valueFrom: openai-api-key
+  - name: FRED_API_KEY
+    valueFrom: fred-api-key
+  # SEC rejects generic User-Agents with 403. Kept in the scope so no contact
+  # address lives in the repo.
+  - name: SEC_USER_AGENT
+    valueFrom: sec-user-agent

@@ -21,7 +21,8 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        # The project (pyproject.toml + uv.lock) lives in backend/.
+        # backend/ is the workspace member; uv sync resolves the workspace root
+        # (and its uv.lock) on its own, so the env lands at the repo root.
         working-directory: backend
     steps:
       - uses: actions/checkout@v4
@@ -45,19 +46,22 @@ jobs:
   frontend:
     name: tsc + build
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        # Mirrors what Databricks Apps runs at deploy time (npm ci + build),
+        # so a stale frontend/package-lock.json fails here instead of there.
+        working-directory: frontend
     steps:
       - uses: actions/checkout@v4
 
-      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v4
         with:
-          bun-version: 1.4.4
+          node-version: 22
 
       - name: Install dependencies
-        working-directory: frontend
-        run: bun install --frozen-lockfile
+        run: npm ci --include=dev
 
-      # `bun run build` is `tsc --noEmit && vite build`, so this covers type
+      # `npm run build` is `tsc --noEmit && vite build`, so this covers type
       # checking and the production bundle FastAPI serves.
       - name: Type check and build
-        working-directory: frontend
-        run: bun run build
+        run: npm run build

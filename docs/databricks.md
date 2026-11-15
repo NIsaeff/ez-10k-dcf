@@ -3,9 +3,9 @@
 Runbook for putting EZ-10k on Databricks Apps. Written against the Databricks docs as
 of November 2026.
 
-**Status:** not deployed yet. The packaging files (`serve.py`, `app.yaml`,
-`databricks.yml`, root `package.json`) land in the commit after this doc; everything
-below is the target state they implement.
+**Status:** packaging is in place (`serve.py`, `app.yaml`, `databricks.yml`, root
+`package.json`, a uv workspace root). Not yet deployed — that needs a workspace URL and
+the `databricks` CLI, see [Deploy](#deploy).
 
 ## Layout constraint: `backend/` + `frontend/`
 
@@ -69,10 +69,23 @@ The root manifest exists solely to trigger the Node branch and hand off to bun, 
   "name": "ez-10k-dcf",
   "private": true,
   "scripts": {
-    "build": "cd frontend && npx -y bun@1.4.4 install --frozen-lockfile && npx -y bun@1.4.4 run build"
+    "build": "npm ci --prefix frontend --include=dev && npm run build --prefix frontend"
   }
 }
 ```
+
+Three details that are load-bearing:
+
+- **npm, not bun.** Databricks guarantees npm; bun is only a local convenience. A
+  `npx bun` shim depends on the package's postinstall step, which can be skipped — the
+  build then fails with a misleading "run the postinstall script manually" message.
+  That's why `frontend/package-lock.json` is committed alongside `bun.lock`.
+- **`--include=dev`.** If the image sets `NODE_ENV=production`, npm would skip
+  `vite`/`typescript` and the build would die on a missing binary.
+- **The lockfile must stay in sync.** Add a dependency with bun and
+  `frontend/package-lock.json` goes stale; `npm ci` then fails loudly in CI (which runs
+  the same two commands) rather than at deploy time. Refresh it with
+  `npm install --package-lock-only --prefix frontend`.
 
 `frontend/dist` stays gitignored; nothing is committed from the build.
 
@@ -84,7 +97,10 @@ The root manifest exists solely to trigger the Node branch and hand off to bun, 
 | `app.yaml` | `command`, health check, non-secret env |
 | `databricks.yml` | Declarative Automation Bundle: app resource + secret scope |
 | `.python-version` | `3.13` — read by uv on both sides |
+| root `pyproject.toml` | uv workspace root, `members = ["backend"]` |
+| root `uv.lock` | single workspace lockfile |
 | root `package.json` | the build shim above |
+| `frontend/package-lock.json` | what the deploy actually installs from |
 
 `app.yaml`:
 
@@ -125,7 +141,11 @@ variables outrank the `.env` file — so injected values win with no code change
 databricks secrets create-scope ez-10k-dcf
 databricks secrets put-secret ez-10k-dcf openai-api-key    # prompts, never echoed
 databricks secrets put-secret ez-10k-dcf fred-api-key
+databricks secrets put-secret ez-10k-dcf sec-user-agent     # e.g. "EZ-10k Capstone (you@example.com)"
 ```
+
+`SEC_USER_AGENT` is in the scope rather than `app.yaml` for two reasons: SEC returns 403
+for generic agents, and a real contact address shouldn't sit in git.
 
 The scope is attached to the app as a resource; `app.yaml`'s `valueFrom` resolves
 resource keys, not raw secret names, so the names above must match the bundle's
