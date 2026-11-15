@@ -7,6 +7,30 @@ of November 2026.
 `databricks.yml`, root `package.json`) land in the commit after this doc; everything
 below is the target state they implement.
 
+## Layout constraint: `backend/` + `frontend/`
+
+The repo follows the FastAPI full-stack template, with the Python project in `backend/`
+and the SPA in `frontend/`. Databricks inspects **one** app directory and runs its build
+steps from there, so the app source path has to be the **repo root** — that's the only
+place a root `package.json` can trigger the SPA build.
+
+That means `uv sync` must also be able to run at the root. `backend/pyproject.toml` stays
+the project, and the root becomes a **uv workspace root**:
+
+```toml
+# pyproject.toml (repo root)
+[tool.uv.workspace]
+members = ["backend"]
+```
+
+`uv sync` at the root then installs the workspace (backend's dependencies) into a single
+root `.venv`, and `uv.lock` moves back to the root. Local work still happens in
+`backend/`: `uv sync` finds the workspace root on its own, so `uv run --directory backend`
+keeps working unchanged.
+
+One more consequence: with the code in `backend/app/`, the process needs `backend/` on
+`sys.path`. `serve.py` does that explicitly rather than relying on the working directory.
+
 ## What the runtime gives you
 
 | | |
@@ -26,11 +50,11 @@ it's why the repo layout matters:
 | Detected | Step |
 |---|---|
 | `package.json` at the **repo root** | `npm install`, then later `npm run build` |
-| `pyproject.toml` + `uv.lock`, no `requirements.txt` | `uv sync` |
+| `pyproject.toml` + `uv.lock` at the app root, no `requirements.txt` | `uv sync` |
 | `app.yaml` | the start `command`, after the build steps |
 
 So the SPA is built **before** the app process starts, which is what
-`app/main.py`'s `if settings.frontend_dist.is_dir()` check needs: it decides at import
+`backend/app/main.py`'s `if settings.frontend_dist.is_dir()` check needs: it decides at import
 time whether to mount the SPA. If the build were skipped, the app would start
 successfully and serve a "Frontend not built" stub — a silent failure, not a crash.
 
@@ -163,7 +187,7 @@ Databricks GitHub app installed on it.
 
 ## Gotchas
 
-- **Catch-all ordering.** `app/main.py` registers the SPA route last so `/api/*`
+- **Catch-all ordering.** `backend/app/main.py` registers the SPA route last so `/api/*`
   wins. Anything that re-registers it earlier will swallow API 404s and return HTML.
 - **`frontend/dist` is gitignored.** That's the point of the build shim; don't
   "fix" it by committing the bundle.

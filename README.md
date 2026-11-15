@@ -16,8 +16,8 @@ submission artifacts (assignment writeup, demo video) remain.
 ## Quickstart
 
 ```bash
-# 1. Python deps (interpreter pinned by .python-version)
-uv sync
+# 1. Python deps — the project lives in backend/ (interpreter from .python-version)
+uv sync --directory backend
 
 # 2. Frontend deps + production build (FastAPI serves dist/)
 cd frontend && bun install && bun run build && cd ..
@@ -28,9 +28,9 @@ cp .env.example .env
 #   FRED_API_KEY                                   (free: fredaccount.stlouisfed.org/apikeys)
 #   SEC_USER_AGENT="EZ-10k Capstone (you@example.com)"
 
-# 4. Run — macro sidecar in one terminal, API in another
-./scripts/dev-mcp.sh          # FRED sidecar the chat's macro tools talk to
-./scripts/dev-backend.sh
+# 4. Run — macro sidecar in one terminal, API in another (from the repo root)
+./backend/scripts/dev-mcp.sh          # FRED sidecar the chat's macro tools talk to
+./backend/scripts/dev-backend.sh
 
 # open http://localhost:8000 — ask about a ticker, or click through the wizard
 ```
@@ -46,9 +46,9 @@ Frontend-only dev loop (HMR — Hot Module Replacement — on the port in `.env`
 the API port):
 
 ```bash
-./scripts/dev-mcp.sh          # terminal 1 — FRED MCP sidecar, port from FRED_MCP_PORT
-./scripts/dev-backend.sh      # terminal 2 — API, port from PORT in .env
-cd frontend && bun run dev    # terminal 3 — UI, port from FRONTEND_PORT
+./backend/scripts/dev-mcp.sh      # terminal 1 — FRED MCP sidecar, port from FRED_MCP_PORT
+./backend/scripts/dev-backend.sh  # terminal 2 — API, port from PORT in .env
+cd frontend && bun run dev        # terminal 3 — UI, port from FRONTEND_PORT
 ```
 
 `uv run` does not read `.env` and `fastapi dev` resolves its port before any app
@@ -179,49 +179,55 @@ the engine consumes rather than text the model writes:
 ## Layout
 
 ```
-app/
-  main.py                 FastAPI routes + SPA mount
-  config.py               pydantic-settings (.env, overridden by real env vars)
-  schemas.py              request/response models (the wire contract)
-  llm.py                  provider client, tool loop, narration + fallback
-  services/
-    edgar.py              SEC client, XBRL helpers, cache
-    financials.py         tag mapping → raw annual rows
-    dcf.py                pure FCFF/DCF math
-    valuation.py          orchestration + WACC defaults
-    wacc.py               CAPM decomposition with per-input sources
-    market.py             Yahoo beta/price + FRED risk-free with fallbacks
-    macro.py              deterministic FRED series (plain HTTPS, engine inputs)
-    fred_mcp.py           MCP client for the chat's FRED tools (child process)
-    filing.py             10-K fetch, sanitise, block parsing, disk cache
-    claims.py             quoted-claim hierarchy + evidence extraction
-    assumptions.py        filing evidence for a single engine assumption
-    wizard_proposals.py   proposal validation, effective values, engine impact
+backend/                  FastAPI app — this is the uv project (pyproject.toml, uv.lock)
+  app/
+    main.py               FastAPI routes + SPA mount
+    config.py             pydantic-settings (.env, overridden by real env vars)
+    schemas.py            request/response models (the wire contract)
+    llm.py                provider client, tool loop, narration + fallback
+    services/
+      edgar.py            SEC client, XBRL helpers, cache
+      financials.py       tag mapping → raw annual rows
+      dcf.py              pure FCFF/DCF math
+      valuation.py        orchestration + WACC defaults
+      wacc.py             CAPM decomposition with per-input sources
+      market.py           Yahoo beta/price + FRED risk-free with fallbacks
+      macro.py            deterministic FRED series (plain HTTPS, engine inputs)
+      fred_mcp.py         MCP client for the chat's FRED tools (child process)
+      filing.py           10-K fetch, sanitise, block parsing, disk cache
+      claims.py           quoted-claim hierarchy + evidence extraction
+      assumptions.py      filing evidence for a single engine assumption
+      wizard_proposals.py proposal validation, effective values, engine impact
+  scripts/
+    dev-backend.sh        API on PORT, with --env-file <repo>/.env
+    dev-mcp.sh            FRED MCP sidecar on FRED_MCP_PORT
+    check_llm.py          provider smoke test
+    analyze_all.py        run all 9 tickers
+    make_fixtures.py      rebuild trimmed SEC test fixtures
+    dump_engine_reference.py  engine snapshot for the frontend parity check
+  tests/                  pytest + trimmed SEC fixtures (no network)
 frontend/                 React 19 + Vite + Tailwind 4 + shadcn (Base UI/Mira)
   src/routes/             file-based routes: wizard, filing, index redirect, __root
   src/components/wizard/  FCFF / WACC / DCF panels + sensitivity grid
-scripts/
-  dev-backend.sh          API on PORT, with --env-file .env
-  dev-mcp.sh              FRED MCP sidecar on FRED_MCP_PORT
-  check_llm.py            provider smoke test
-  analyze_all.py          run all 9 tickers
-  make_fixtures.py        rebuild trimmed SEC test fixtures
-  dump_engine_reference.py  engine snapshot for the frontend parity check
-tests/                    pytest + trimmed SEC fixtures (no network)
 docs/
   capstone-plan.md        phases, blockers, Definition of Done
   valuation-spec.md       frozen schema + formulas
   qa-report.md            9-ticker results and limitations
 ```
 
+The split follows the [FastAPI full-stack template](https://github.com/fastapi/full-stack-fastapi-template).
+Anything the two halves share — `.env`, `frontend/dist`, `data/` — sits at the repo root,
+which is why `backend/app/config.py` resolves paths from `backend/`.
+
 ## Tests and checks
 
 ```bash
-uv run pytest -q
-uvx ruff check app scripts tests
-cd frontend && bunx tsc --noEmit && bun run build
-uv run python -m scripts.check_llm          # one live provider call
-uv run python -m scripts.analyze_all        # all 9 tickers
+uv run --directory backend pytest -q
+(cd backend && uvx ruff check app scripts tests)   # run from backend/: ruff infers
+                                                   # first-party packages from cwd
+(cd frontend && bunx tsc --noEmit && bun run build)
+uv run --directory backend python -m scripts.check_llm     # one live provider call
+uv run --directory backend python -m scripts.analyze_all   # all 9 tickers
 ```
 
 160 tests, all offline: SEC and Yahoo responses come from trimmed fixtures in
@@ -232,7 +238,7 @@ push to `main` and every pull request (`.github/workflows/ci.yml`).
 ## Deployment
 
 Target platform is **Databricks Apps**, which builds from the repo and would serve the
-SPA from FastAPI the same way `./scripts/dev-backend.sh` does. Two things have to differ
+SPA from FastAPI the same way `./backend/scripts/dev-backend.sh` does. Two things have to differ
 from local dev: no Node process at runtime (the chat's macro tools go over plain HTTPS
 through `app/services/macro.py`), and an ephemeral filesystem (`DATA_DIR` points at
 `/tmp`, so the filing and FRED caches are per-container and recompute after a restart).

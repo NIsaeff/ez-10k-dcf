@@ -6,11 +6,12 @@
 # per call throws that state away on every request.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+REPO_ROOT="$(cd .. && pwd)"
 
-if [ -f .env ]; then
+if [ -f "$REPO_ROOT/.env" ]; then
   set -a
   # shellcheck disable=SC1091
-  . ./.env
+  . "$REPO_ROOT/.env"
   set +a
 fi
 

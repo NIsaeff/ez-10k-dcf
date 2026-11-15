@@ -2,7 +2,11 @@ from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-ROOT_DIR = Path(__file__).resolve().parent.parent
+# The layout follows the FastAPI full-stack template: Python in `backend/`,
+# the SPA in `frontend/`. Everything the two share — `.env`, `frontend/dist`,
+# `data/` — lives one level above the Python package.
+BACKEND_DIR = Path(__file__).resolve().parent.parent
+ROOT_DIR = BACKEND_DIR.parent
 
 
 class Settings(BaseSettings):
