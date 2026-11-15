@@ -43,7 +43,9 @@ code runs, so the wrapper just adds `--env-file .env`. The equivalent raw comman
 
 Discounted Cash Flow (DCF) is a valuation technique to value any corporation, company, organization or even a particular project within an org to find its intrinsic value. It works by taking your own forcasts for future growth then discounting that growth based on how far in the future it is. You can think of "Discounting" as essentailly adjusting the price based on benchmarking future value relative to other opportunities, such as investing in "gauranteed" treasuries or bonds or other stocks or ventures. 
 
-The whole goal with this is to try to find the intrinsic or "true" value of something based on your own particular analysis or (non-insider) information and buy or hold if your value is larger thatn the markets or sell/not-buy if your value is smaller than the market's.
+The whole goal with this is to try to find the intrinsic or "true" value of something based on your own particular analysis or (non-insider) information. Once you perform you analisis you can then choose to: 
+- buy or hold if your value is larger thatn the markets or
+- sell/not-buy if your value is smaller than the market's.
 
 ## How it works
 
