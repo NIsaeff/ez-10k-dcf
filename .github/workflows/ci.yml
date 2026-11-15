@@ -1,0 +1,54 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: pytest + ruff
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Reads .python-version, so CI uses the same interpreter as local dev.
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Tests
+        run: uv run pytest -q
+
+      # Pinned: a new ruff release adds rules and would fail the gate for no
+      # reason. Bump deliberately.
+      - name: Lint
+        run: uvx ruff@0.17.5 check app scripts tests
+
+  frontend:
+    name: tsc + build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: bun install --frozen-lockfile
+
+      # `bun run build` is `tsc --noEmit && vite build`, so this covers type
+      # checking and the production bundle FastAPI serves.
+      - name: Type check and build
+        working-directory: frontend
+        run: bun run build

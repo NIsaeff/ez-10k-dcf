@@ -1,13 +1,22 @@
 # EZ-10k — Agentic DCF
 
-enter a ticker, pull the company's latest 10-K financials from SEC EDGAR, and compute a discounted cash flow valuation in the chat UI. Currently Application only includes a couple tickers for now, the plan is to be fully compatible. `AAPL`, `MSFT`, `GOOGL`, `AMZN`, `NVDA`, `META`, `TSLA`, `KO`, `PWR`.
+Enter a ticker, pull the company's latest 10-K financials from SEC EDGAR, and value it
+with a discounted cash flow model whose every input you can inspect.
 
-Unknown tickers return a clear `422 unsupported_ticker` — no guessed valuation.
+**Supported today:** `AAPL`, `MSFT`, `GOOGL`, `AMZN`, `NVDA`, `META`, `TSLA`, `KO`,
+`PWR`. The ticker box searches all ~10,400 SEC filers; the valuation engine is limited to
+these nine while the remaining XBRL tag paths are mapped. Unknown tickers return a clear
+`422 unsupported_ticker` — no guessed valuation.
+
+**Status:** phases 1–8 complete (backend, DCF, SEC extraction, API, UI, QA, drill-down
+provenance, DCF Wizard), plus the narrative layer: docked chat panel, 10-K Analysis with
+quoted claims, wizard proposals with before/after impact, and FRED macro context. The
+submission artifacts (assignment writeup, demo video) remain.
 
 ## Quickstart
 
 ```bash
-# 1. Python deps
+# 1. Python deps (interpreter pinned by .python-version)
 uv sync
 
 # 2. Frontend deps + production build (FastAPI serves dist/)
@@ -15,18 +24,26 @@ cd frontend && bun install && bun run build && cd ..
 
 # 3. Environment: copy the schema and fill in real values
 cp .env.example .env
-#   OPENAI_API_KEY / OPENAI_BASE_URL / LLM_MODEL  (OpenAI-compatible LiteLLM proxy)
+#   OPENAI_API_KEY / OPENAI_BASE_URL / LLM_MODEL   (OpenAI-compatible LiteLLM proxy)
+#   FRED_API_KEY                                   (free: fredaccount.stlouisfed.org/apikeys)
 #   SEC_USER_AGENT="EZ-10k Capstone (you@example.com)"
 
-# 4. Run
-./scripts/dev-backend.sh # or cd backend then uv run fastapi dev
+# 4. Run — macro sidecar in one terminal, API in another
+./scripts/dev-mcp.sh          # FRED sidecar the chat's macro tools talk to
+./scripts/dev-backend.sh
 
-# open http://localhost:8001 and type any question about investments or the stock market
+# open http://localhost:8000 — ask about a ticker, or click through the wizard
 ```
-# WARNING: DO NOT TAKE ANY INVESTMENT ADVICE FROM THIS APP, IT IS REALLY BAD AND DUMB
-(for now but still dont even if its good lol)
 
-Frontend-only dev loop (HMR (Hot Module Replacement) on the port in `.env`, proxy to the API port):
+Without `./scripts/dev-mcp.sh` the app still runs: the engine's risk-free rate falls back
+to Yahoo `^TNX`, and the chat answers without macro tools.
+
+> ⚠️ **DO NOT TAKE INVESTMENT ADVICE FROM THIS APP.** It is really bad and dumb
+> (for now — but don't even if it gets good lol). Valuations here are a learning
+> exercise, not a recommendation to trade.
+
+Frontend-only dev loop (HMR — Hot Module Replacement — on the port in `.env`, proxy to
+the API port):
 
 ```bash
 ./scripts/dev-mcp.sh          # terminal 1 — FRED MCP sidecar, port from FRED_MCP_PORT
@@ -37,15 +54,17 @@ cd frontend && bun run dev    # terminal 3 — UI, port from FRONTEND_PORT
 `uv run` does not read `.env` and `fastapi dev` resolves its port before any app
 code runs, so the wrapper just adds `--env-file .env`. The equivalent raw command is
 `uv run --env-file .env fastapi dev app/main.py`; the frontend needs no flag.
-`set -a; . ./.env; set +a` in a shell also makes the raw commands work.
+`set -a; . ./.env; set +a` in a shell also makes the raw commands work. With no
+`.env` at all, both sides fall back to their code defaults: API on 8000, vite on 5173.
 
 ## What is a Discounted Cash Flow?
 
-Discounted Cash Flow (DCF) is a valuation technique to value any corporation, company, organization or even a particular project within an org to find its intrinsic value. It works by taking your own forcasts for future growth then discounting that growth based on how far in the future it is. You can think of "Discounting" as essentailly adjusting the price based on benchmarking future value relative to other opportunities, such as investing in "gauranteed" treasuries or bonds or other stocks or ventures. 
+Discounted Cash Flow (DCF) is a valuation technique to value any corporation, company, organization or even a particular project within an org to find its intrinsic value. It works by taking your own forecasts for future growth then discounting that growth based on how far in the future it is. You can think of "Discounting" as essentially adjusting the price based on benchmarking future value relative to other opportunities, such as investing in "guaranteed" treasuries or bonds or other stocks or ventures. 
 
-The whole goal with this is to try to find the intrinsic or "true" value of something based on your own particular analysis or (non-insider) information. Once you perform you analisis you can then choose to: 
-- buy or hold if your value is larger thatn the markets or
-- sell/not-buy if your value is smaller than the market's.
+The whole goal with this is to try to find the intrinsic or "true" value of something based on your own particular analysis or (non-insider) information. Once you perform your analysis you can then choose to:
+
+- buy or hold if your value is larger than the market's, or
+- sell/not buy if your value is smaller than the market's.
 
 ## How it works
 
@@ -65,8 +84,13 @@ React chat (Vite) ──/api/chat──▶ FastAPI
 - **Fail loudly.** Missing required data returns `422` with `missing_fields`.
 - **Cache.** SEC and Yahoo responses live in `data/raw/` (gitignored); tests use trimmed
   fixtures and never touch the network.
-- **Market inputs.** Beta, price and the risk-free rate come from Yahoo; cost of debt
-  comes from SEC `InterestExpense`. Every CAPM input carries a `source` string.
+- **Market inputs.** Beta and price come from Yahoo; the risk-free rate comes from FRED
+  `DGS10`, with Yahoo `^TNX` only as the fallback; cost of debt comes from SEC
+  `InterestExpense`. Every CAPM input carries a `source` string.
+- **Proposals, not edits.** The AI can propose an assumption change (`growth` 1.2% →
+  1.5%) or a navigation, with a rationale, optional filing evidence, and the per-share
+  impact **recomputed by the engine**. Nothing moves until you press ✓; every proposal
+  carries a confidence score that tints its card.
 
 ## API
 
@@ -80,9 +104,16 @@ React chat (Vite) ──/api/chat──▶ FastAPI
 | `GET /api/filing/{ticker}` | Parsed 10-K blocks + a hierarchy of quoted claims |
 | `GET /api/filing/{ticker}/document` | Sanitised same-origin filing for the viewer |
 | `GET /api/assumptions/{ticker}` | Filing evidence for an engine assumption (growth pilot) |
-| `POST /api/chat` | `{messages}` → `{reply, valuation}`; detects allowlisted tickers |
-| `GET /api/health` | status, model, supported tickers |
+| `POST /api/chat` | `{messages, context?}` → `{reply, trace, sources, proposals, valuation}` |
+| `GET /api/health` | status, model, supported tickers, FRED sidecar state |
 | `GET /docs` | Swagger UI |
+
+`/api/chat` takes the wizard's current state as `context` so the model can reason about
+deltas ("raise growth by 0.25pp") instead of guessing absolute values, and returns each
+tool call in `trace` with its input, output, status and duration. `proposals` is the
+human-in-the-loop queue: `{id, kind, changes[{key, label, before, after, confidence}],
+rationale, evidence, impact, confidence}`. Applying one is a frontend action — the API
+never applies it.
 
 Routes: `/` redirects to `/wizard`. The DCF Wizard (FCFF, WACC, DCF tabs) keeps its
 state in search params so a valuation is linkable; `/filing` is 10-K Analysis (claim tree
@@ -149,26 +180,38 @@ the engine consumes rather than text the model writes:
 
 ```
 app/
-  main.py              FastAPI routes + frontend mount
-  config.py            pydantic-settings (.env)
-  schemas.py           request/response models
-  llm.py               provider client + narration/fallback
+  main.py                 FastAPI routes + SPA mount
+  config.py               pydantic-settings (.env, overridden by real env vars)
+  schemas.py              request/response models (the wire contract)
+  llm.py                  provider client, tool loop, narration + fallback
   services/
-    edgar.py           SEC client, XBRL helpers, cache
-    financials.py      tag mapping → raw annual rows
-    dcf.py             pure FCFF/DCF math
-    valuation.py       orchestration + WACC defaults
-    fred_mcp.py        MCP client for FRED macro tools (child process)
-frontend/              React 19 + Vite + Tailwind 4 + shadcn (Base UI/Mira)
+    edgar.py              SEC client, XBRL helpers, cache
+    financials.py         tag mapping → raw annual rows
+    dcf.py                pure FCFF/DCF math
+    valuation.py          orchestration + WACC defaults
+    wacc.py               CAPM decomposition with per-input sources
+    market.py             Yahoo beta/price + FRED risk-free with fallbacks
+    macro.py              deterministic FRED series (plain HTTPS, engine inputs)
+    fred_mcp.py           MCP client for the chat's FRED tools (child process)
+    filing.py             10-K fetch, sanitise, block parsing, disk cache
+    claims.py             quoted-claim hierarchy + evidence extraction
+    assumptions.py        filing evidence for a single engine assumption
+    wizard_proposals.py   proposal validation, effective values, engine impact
+frontend/                 React 19 + Vite + Tailwind 4 + shadcn (Base UI/Mira)
+  src/routes/             file-based routes: wizard, filing, index redirect, __root
+  src/components/wizard/  FCFF / WACC / DCF panels + sensitivity grid
 scripts/
-  check_llm.py         provider smoke test
-  analyze_all.py       run all 9 tickers
-  make_fixtures.py     rebuild trimmed SEC test fixtures
-tests/                 pytest + fixtures
+  dev-backend.sh          API on PORT, with --env-file .env
+  dev-mcp.sh              FRED MCP sidecar on FRED_MCP_PORT
+  check_llm.py            provider smoke test
+  analyze_all.py          run all 9 tickers
+  make_fixtures.py        rebuild trimmed SEC test fixtures
+  dump_engine_reference.py  engine snapshot for the frontend parity check
+tests/                    pytest + trimmed SEC fixtures (no network)
 docs/
-  capstone-plan.md     phases, blockers, Definition of Done
-  valuation-spec.md    frozen schema + formulas
-  qa-report.md         9-ticker results and limitations
+  capstone-plan.md        phases, blockers, Definition of Done
+  valuation-spec.md       frozen schema + formulas
+  qa-report.md            9-ticker results and limitations
 ```
 
 ## Tests and checks
@@ -181,10 +224,27 @@ uv run python -m scripts.check_llm          # one live provider call
 uv run python -m scripts.analyze_all        # all 9 tickers
 ```
 
+160 tests, all offline: SEC and Yahoo responses come from trimmed fixtures in
+`tests/fixtures/`, and `macro.py`'s fetcher is monkeypatched. `ruff`, `tsc` and the
+production build are part of the gate as well. CI runs the same four commands on every
+push to `main` and every pull request (`.github/workflows/ci.yml`).
+
+## Deployment
+
+Target platform is **Databricks Apps**, which builds from the repo and would serve the
+SPA from FastAPI the same way `./scripts/dev-backend.sh` does. Two things have to differ
+from local dev: no Node process at runtime (the chat's macro tools go over plain HTTPS
+through `app/services/macro.py`), and an ephemeral filesystem (`DATA_DIR` points at
+`/tmp`, so the filing and FRED caches are per-container and recompute after a restart).
+The packaging files are landing next — this section describes the target state.
+
+Runbook, including the secret scope and bundle commands: [`docs/databricks.md`](docs/databricks.md).
+
 ## Assumptions and limitations
 
-- WACC is a manual default per ticker, shown on the card; CAPM/auto market data is
-  deferred.
+- Default WACC is a manual per-ticker value, shown on the card. `GET /api/wacc` does
+  compute a full CAPM breakdown (beta from Yahoo, risk-free from FRED, cost of debt from
+  SEC) and the wizard shows it, but the default is not auto-applied.
 - Growth is a faded historical FCFF CAGR; terminal growth is 2.5%.
 - FCFF base is a normalized 5-year average (outliers outside 0.5×–2× median removed).
 - No persistence, auth, streaming, or real-time prices.
@@ -197,6 +257,7 @@ uv run python -m scripts.analyze_all        # all 9 tickers
 - [`docs/qa-report.md`](docs/qa-report.md)
 - [`docs/backlog.md`](docs/backlog.md) — understood but unscheduled work
 - [`docs/narrative-layer.md`](docs/narrative-layer.md) — 10-K prose / AI recommendations
+- [`docs/databricks.md`](docs/databricks.md) — deployment runbook
 
 ## Reference
 
