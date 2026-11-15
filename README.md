@@ -16,8 +16,8 @@ submission artifacts (assignment writeup, demo video) remain.
 ## Quickstart
 
 ```bash
-# 1. Python deps — the project lives in backend/ (interpreter from .python-version)
-uv sync --directory backend
+# 1. Python deps — uv workspace root; the project itself is backend/
+uv sync
 
 # 2. Frontend deps + production build (FastAPI serves dist/)
 cd frontend && bun install && bun run build && cd ..
@@ -179,7 +179,13 @@ the engine consumes rather than text the model writes:
 ## Layout
 
 ```
-backend/                  FastAPI app — this is the uv project (pyproject.toml, uv.lock)
+serve.py                  entrypoint for hosts that start one process from the root (Databricks)
+app.yaml                  Databricks Apps command, health check, env
+databricks.yml            Declarative Automation Bundle (app + secret scope)
+package.json              build shim: the platform only looks for a root package.json
+pyproject.toml            uv workspace root, member = backend
+uv.lock                   one lockfile for the workspace
+backend/                  the FastAPI project
   app/
     main.py               FastAPI routes + SPA mount
     config.py             pydantic-settings (.env, overridden by real env vars)
@@ -232,8 +238,9 @@ uv run --directory backend python -m scripts.analyze_all   # all 9 tickers
 
 160 tests, all offline: SEC and Yahoo responses come from trimmed fixtures in
 `tests/fixtures/`, and `macro.py`'s fetcher is monkeypatched. `ruff`, `tsc` and the
-production build are part of the gate as well. CI runs the same four commands on every
-push to `main` and every pull request (`.github/workflows/ci.yml`).
+production build are part of the gate as well. CI runs the same gate on every pull
+request (`.github/workflows/ci.yml`), using `npm ci` for the frontend so it matches what
+Databricks runs at deploy time.
 
 `main` is protected: changes land through a pull request, both CI jobs are required,
 squash-merge only, no force-pushes and no deletions. A direct `git push` is refused
@@ -257,7 +264,14 @@ SPA from FastAPI the same way `./backend/scripts/dev-backend.sh` does. Two thing
 from local dev: no Node process at runtime (the chat's macro tools go over plain HTTPS
 through `app/services/macro.py`), and an ephemeral filesystem (`DATA_DIR` points at
 `/tmp`, so the filing and FRED caches are per-container and recompute after a restart).
-The packaging files are landing next — this section describes the target state.
+The packaging is in place: `serve.py` binds `DATABRICKS_APP_PORT`, `app.yaml` declares
+the command and health check, and `databricks.yml` deploys the app plus its secret scope.
+The SPA is built during deployment from `frontend/package-lock.json` (npm), so
+regenerate that lockfile whenever frontend dependencies change:
+
+```bash
+npm install --package-lock-only --prefix frontend   # after a bun add/remove
+```
 
 Runbook, including the secret scope and bundle commands: [`docs/databricks.md`](docs/databricks.md).
 
